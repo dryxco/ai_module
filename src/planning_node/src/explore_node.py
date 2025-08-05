@@ -77,7 +77,7 @@ class ExplorationNode:
         self.pose_pub = rospy.Publisher('/way_point_with_heading', Pose2D, queue_size=1)
         
         rospy.Timer(rospy.Duration(0.2), self.timer_callback)
-        self.topic_buffer = rospy.Timer(rospy.Duration(1.0), self.buffer)
+        self.topic_buffer = rospy.Timer(rospy.Duration(0.5), self.buffer)
 
         rospy.loginfo("Exploration node initialized. Listening to /mst_edges_marker")
     
@@ -294,7 +294,7 @@ class ExplorationNode:
                     if self.route_idx == 1:
                         self.stop_recording()
                     if self.route_idx == len(route_cn) - 2 :
-                        self.start_recording(f'{self.next_node_idx}.bag')
+                        self.start_recording() #self.start_recording(f'{self.cur_node_idx}.bag')
                     if self.route_idx >= len(route_cn) :
                         self.route_idx = 0
                         if len(self.node_to_travel) > 1 :
@@ -338,8 +338,11 @@ class ExplorationNode:
         # rospy.loginfo("rosbag recording started.")
     
     def stop_recording(self):
-        node_idx = self.next_node_idx
-        n = len(self.buffer_dict[node_idx]['image'])
+        node_idx = self.cur_node_idx
+        try:
+            n = len(self.buffer_dict[node_idx]['image'])
+        except :
+            n = 0
         self.recording = False
         rospy.loginfo(f"[Recorder] finished dumping data for node {node_idx}, recorded {n} data")
 
