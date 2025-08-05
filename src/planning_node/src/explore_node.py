@@ -66,7 +66,7 @@ class ExplorationNode:
             'pose': None,
         }
 
-        rospy.Subscriber("/camera/image", Image, self.image_callback)
+        #rospy.Subscriber("/camera/image", Image, self.image_callback)
         rospy.Subscriber("/camera/image/compressed", CompressedImage, self.comp_image_callback)
         rospy.Subscriber("/depth_image", Image, self.depth_image_callback)
 
