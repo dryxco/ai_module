@@ -41,6 +41,7 @@ class ExplorationNode:
 
         self.cur_node_idx = None
         self.next_node_idx = None
+        self.record_node_idx = None
         self.route_idx = 0
 
         self.dis_ths = 0.45
@@ -77,7 +78,7 @@ class ExplorationNode:
         self.pose_pub = rospy.Publisher('/way_point_with_heading', Pose2D, queue_size=1)
         
         rospy.Timer(rospy.Duration(0.2), self.timer_callback)
-        self.topic_buffer = rospy.Timer(rospy.Duration(0.5), self.buffer)
+        self.topic_buffer = rospy.Timer(rospy.Duration(1.0), self.buffer)
 
         rospy.loginfo("Exploration node initialized. Listening to /mst_edges_marker")
     
@@ -90,7 +91,7 @@ class ExplorationNode:
         if not self.recording:
             return
         
-        node_idx = self.next_node_idx
+        node_idx = self.record_node_idx
 
         if self.latest_image and self.latest_depth_image and self.latest_pose:
             self.buffer_dict[node_idx]['image'].append(self.latest_image)
@@ -311,7 +312,8 @@ class ExplorationNode:
     
     def start_recording(self, data_root=None):
         node_idx = self.next_node_idx
-
+        self.record_node_idx = node_idx
+        
         if self.buffer_dict[node_idx] is None:
             self.buffer_dict[node_idx] = {
                 'image': [],
@@ -338,7 +340,7 @@ class ExplorationNode:
         # rospy.loginfo("rosbag recording started.")
     
     def stop_recording(self):
-        node_idx = self.cur_node_idx
+        node_idx = self.record_node_idx
         try:
             n = len(self.buffer_dict[node_idx]['image'])
         except :
