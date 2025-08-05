@@ -96,7 +96,7 @@ class ExplorationNode:
             self.buffer_dict[node_idx]['image'].append(self.latest_image)
             self.buffer_dict[node_idx]['depth'].append(self.latest_depth_image)
             self.buffer_dict[node_idx]['pose'].append(self.latest_pose)
-
+        
         else:
             rospy.logwarn_throttle(5, "Waiting for full data set before buffering...")
 
@@ -339,9 +339,9 @@ class ExplorationNode:
     
     def stop_recording(self):
         node_idx = self.next_node_idx
-        
+        n = len(self.buffer_dict[node_idx]['image'])
         self.recording = False
-        rospy.loginfo(f"[Recorder] finished dumping data for node {node_idx}")
+        rospy.loginfo(f"[Recorder] finished dumping data for node {node_idx}, recorded {n} data")
 
         # [for rosbag record]
         # if self.bag_process:
