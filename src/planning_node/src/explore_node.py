@@ -79,7 +79,7 @@ class ExplorationNode:
         self.pose_pub = rospy.Publisher('/way_point_with_heading', Pose2D, queue_size=1)
         
         rospy.Timer(rospy.Duration(0.2), self.timer_callback)
-        self.topic_buffer = rospy.Timer(rospy.Duration(1.0), self.buffer)
+        self.topic_buffer = rospy.Timer(rospy.Duration(0.5), self.buffer)
 
         rospy.loginfo("Exploration node initialized. Listening to /mst_edges_marker")
     
@@ -325,7 +325,7 @@ class ExplorationNode:
     def start_recording(self, data_root=None):
         node_idx = self.next_node_idx
         if data_root is None:
-            module_root = os.path.abspath(os.path.join(__file__, '..','..','..'))
+            module_root = os.path.abspath(os.path.join(__file__, '..','..','..', '..'))
             base = os.path.join(module_root, 'data', str(node_idx))
             #base = os.path.join(os.path.dirname(__file__), '..', 'data', str(node_idx))
         else:
