@@ -57,9 +57,7 @@ class ExplorationNode:
 
         # buffer
         self.recording = False
-        self.buf_images = []
-        self.buf_depths = []
-        self.buf_poses = []  
+        self.buffer_dict = defaultdict(lambda: None)
         self.dirs = {
             'image': None,
             'depth': None,
@@ -79,7 +77,7 @@ class ExplorationNode:
         self.pose_pub = rospy.Publisher('/way_point_with_heading', Pose2D, queue_size=1)
         
         rospy.Timer(rospy.Duration(0.2), self.timer_callback)
-        self.topic_buffer = rospy.Timer(rospy.Duration(0.5), self.buffer)
+        self.topic_buffer = rospy.Timer(rospy.Duration(1.0), self.buffer)
 
         rospy.loginfo("Exploration node initialized. Listening to /mst_edges_marker")
     
@@ -92,25 +90,13 @@ class ExplorationNode:
         if not self.recording:
             return
         
+        node_idx = self.next_node_idx
+
         if self.latest_image and self.latest_depth_image and self.latest_pose:
-            
-            img = self.bridge.compressed_imgmsg_to_cv2(self.latest_image, 'bgr8')
-            self.buf_images.append(img)
+            self.buffer_dict[node_idx]['image'].append(self.latest_image)
+            self.buffer_dict[node_idx]['depth'].append(self.latest_depth_image)
+            self.buffer_dict[node_idx]['pose'].append(self.latest_pose)
 
-            # Depth (float32 → mm 정수)
-            depth = self.bridge.imgmsg_to_cv2(self.latest_depth_image, '32FC1')
-            depth_mm = (depth * 1000).astype(np.uint16)
-            self.buf_depths.append(depth_mm)
-
-            # Pose
-            p = self.latest_pose.pose.pose
-            pd = {
-                'timestamp': self.latest_pose.header.stamp.to_sec(),
-                'position': {'x': p.position.x, 'y': p.position.y, 'z': p.position.z},
-                'orientation': {'x': p.orientation.x, 'y': p.orientation.y,
-                                'z': p.orientation.z, 'w': p.orientation.w},
-            }
-            self.buf_poses.append(pd)
         else:
             rospy.logwarn_throttle(5, "Waiting for full data set before buffering...")
 
@@ -320,28 +306,25 @@ class ExplorationNode:
                             # rosbag record stop as below code (entire route)
                             self.stop_recording()
                             self.explore_stop = True
+                            self.store_data()
                             rospy.logwarn("all nodes reached! arrived at initial root node")
     
     def start_recording(self, data_root=None):
         node_idx = self.next_node_idx
-        if data_root is None:
-            module_root = os.path.abspath(os.path.join(__file__, '..','..','..', '..'))
-            base = os.path.join(module_root, 'data', str(node_idx))
-            #base = os.path.join(os.path.dirname(__file__), '..', 'data', str(node_idx))
-        else:
-            base = os.path.join(data_root, str(node_idx))
-        self.dirs = {
-            'image': os.path.join(base, 'image'),
-            'depth': os.path.join(base, 'depth_image'),
-            'pose': os.path.join(base, 'pose'),
-        }
-        for d in self.dirs.values():
-            os.makedirs(d, exist_ok=True)
+
+        if self.buffer_dict[node_idx] is None:
+            self.buffer_dict[node_idx] = {
+                'image': [],
+                'depth': [],
+                'pose': [],
+            }
+        else :
+            self.buffer_dict[node_idx]['image'].clear()
+            self.buffer_dict[node_idx]['depth'].clear()
+            self.buffer_dict[node_idx]['pose'].clear()
         
-        self.buf_images.clear()
-        self.buf_depths.clear()
-        self.buf_poses.clear()
         self.recording = True
+        self.buffer(None)
         rospy.loginfo(f"[Exploration node] start_recording for node {node_idx}")
 
         # [for rosbag record]
@@ -356,21 +339,6 @@ class ExplorationNode:
     
     def stop_recording(self):
         node_idx = self.next_node_idx
-        n = len(self.buf_images)
-
-        rospy.loginfo(f"[Recorder] stop_recording: dumping {n} frames for node {node_idx}")
-        
-        for i in range(n):
-            idx = f"{i:04d}"
-            # image
-            cv2.imwrite(os.path.join(self.dirs['image'],   f"{idx}.png"),
-                        self.buf_images[i])
-            # depth
-            cv2.imwrite(os.path.join(self.dirs['depth'],   f"{idx}.png"),
-                        self.buf_depths[i])
-            # pose
-            with open(os.path.join(self.dirs['pose'],      f"{idx}.json"), 'w') as f:
-                json.dump(self.buf_poses[i], f, indent=2)
         
         self.recording = False
         rospy.loginfo(f"[Recorder] finished dumping data for node {node_idx}")
@@ -381,6 +349,53 @@ class ExplorationNode:
         #     self.bag_process.wait()
         #     rospy.loginfo("rosbag recording stopped.")
     
+    def store_data(self):
+        for node_idx, buf in self.buffer_dict.items():
+            if buf is None or len(buf['image']) == 0:
+                rospy.loginfo(f"[Store] No data for node {node_idx}, skipping")
+                continue
+            
+            base = os.path.abspath(os.path.join(__file__, '..', '..', '..', '..', 'data', str(node_idx)))
+            dirs = {
+                'image':      os.path.join(base, 'image'),
+                'depth':      os.path.join(base, 'depth'),
+                'pose':       os.path.join(base, 'pose'),
+            }
+
+            for d in dirs.values():
+                os.makedirs(d, exist_ok=True)
+
+            n = len(buf['image'])
+            rospy.loginfo(f"[Store] dumping {n} frames for node {node_idx}")
+            
+            for i in range(n):
+                idx = f"{i:04d}"
+                
+                img = self.bridge.compressed_imgmsg_to_cv2(buf['image'][i], 'bgr8')
+                cv2.imwrite(os.path.join(dirs['image'], f"{idx}.png"), img)
+
+                # depth: raw Image → cv2 → mm uint16
+                depth = self.bridge.imgmsg_to_cv2(buf['depth'][i], '32FC1')
+                depth_mm = (depth * 1000).astype(np.uint16)
+                cv2.imwrite(os.path.join(dirs['depth'], f"{idx}.png"), depth_mm)
+
+                # pose: Odometry → dict → json
+                odom = buf['pose'][i].pose.pose
+                pd = {
+                    'timestamp': buf['pose'][i].header.stamp.to_sec(),
+                    'position': {
+                        'x': odom.position.x, 'y': odom.position.y, 'z': odom.position.z
+                    },
+                    'orientation': {
+                        'x': odom.orientation.x, 'y': odom.orientation.y,
+                        'z': odom.orientation.z, 'w': odom.orientation.w
+                    }
+                }
+                with open(os.path.join(dirs['pose'], f"{idx}.json"), 'w') as f:
+                    json.dump(pd, f, indent=2)
+
+        rospy.loginfo("[Store] all buffered data has been written to disk")
+
     def run(self):
         rospy.spin()
 
