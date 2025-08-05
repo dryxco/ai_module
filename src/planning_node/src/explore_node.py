@@ -2,16 +2,23 @@
 import rospy
 import pickle
 import numpy as np
+
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
-from geometry_msgs.msg import Point, Pose2D
+from sensor_msgs.msg import CompressedImage, Image
+from geometry_msgs.msg import Point, PoseStamped, Pose2D
 from std_msgs.msg import String, Int32MultiArray
+
 import hashlib, struct
 from collections import defaultdict
+
 import subprocess, signal
 import os
+import json, cv2
+from cv_bridge import CvBridge
+
 
 class ExplorationNode:
     def __init__(self):
@@ -38,8 +45,30 @@ class ExplorationNode:
 
         self.dis_ths = 0.45
         
+        # exploration switch
         self.bag_process = None
         self.explore_stop = False
+        
+        # image callback
+        self.bridge = CvBridge()
+        self.latest_pose = None
+        self.latest_image = None
+        self.latest_depth_image = None
+
+        # buffer
+        self.recording = False
+        self.buf_images = []
+        self.buf_depths = []
+        self.buf_poses = []  
+        self.dirs = {
+            'image': None,
+            'depth': None,
+            'pose': None,
+        }
+
+        rospy.Subscriber("/camera/image", Image, self.image_callback)
+        rospy.Subscriber("/camera/image/compressed", CompressedImage, self.comp_image_callback)
+        rospy.Subscriber("/depth_image", Image, self.depth_image_callback)
 
         rospy.Subscriber("/state_estimation", Odometry, self.pose_callback)
         rospy.Subscriber("/mst_edges_marker", Marker, self.mst_callback)
@@ -50,13 +79,47 @@ class ExplorationNode:
         self.pose_pub = rospy.Publisher('/way_point_with_heading', Pose2D, queue_size=1)
         
         rospy.Timer(rospy.Duration(0.2), self.timer_callback)
+        self.topic_buffer = rospy.Timer(rospy.Duration(1.0), self.buffer)
 
         rospy.loginfo("Exploration node initialized. Listening to /mst_edges_marker")
     
     def timer_callback(self, event):
         if not self.explore_stop:
             self.waypoint_planning()
+    
+    def buffer(self, event):
+        # MST node 도착 직전에 buffer 시작, 직후에 buffer 종료
+        if not self.recording:
+            return
+        
+        if self.latest_image and self.latest_depth_image and self.latest_pose:
+            
+            img = self.bridge.compressed_imgmsg_to_cv2(self.latest_image, 'bgr8')
+            self.buf_images.append(img)
 
+            # Depth (float32 → mm 정수)
+            depth = self.bridge.imgmsg_to_cv2(self.latest_depth_image, '32FC1')
+            depth_mm = (depth * 1000).astype(np.uint16)
+            self.buf_depths.append(depth_mm)
+
+            # Pose
+            p = self.latest_pose.pose.pose
+            pd = {
+                'timestamp': self.latest_pose.header.stamp.to_sec(),
+                'position': {'x': p.position.x, 'y': p.position.y, 'z': p.position.z},
+                'orientation': {'x': p.orientation.x, 'y': p.orientation.y,
+                                'z': p.orientation.z, 'w': p.orientation.w},
+            }
+            self.buf_poses.append(pd)
+        else:
+            rospy.logwarn_throttle(5, "Waiting for full data set before buffering...")
+
+    def comp_image_callback(self, msg):
+        self.latest_image = msg
+    
+    def depth_image_callback(self, msg):
+        self.latest_depth_image = msg
+    
     def node_callback(self, msg):
         if self.new_data :
             self.nodes = list(pc2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True))
@@ -76,6 +139,7 @@ class ExplorationNode:
         return None
     
     def pose_callback(self, msg):
+        self.latest_pose = msg
         self.position = np.array([
             msg.pose.pose.position.x,
             msg.pose.pose.position.y,
@@ -209,7 +273,7 @@ class ExplorationNode:
                 self.cur_node_idx = self.node_to_travel.pop(0)
                 self.next_node_idx = self.node_to_travel[0]
                 # rosbag record start as below code (entire route)
-                self.start_recording(f'{self.cur_node_idx}.bag')
+                self.start_recording() #self.start_recording(f'{self.cur_node_idx}.bag')
                 rospy.logwarn("initial node arrived, send waypoint following MST")
         
         else:
@@ -258,22 +322,64 @@ class ExplorationNode:
                             self.explore_stop = True
                             rospy.logwarn("all nodes reached! arrived at initial root node")
     
-    def start_recording(self, filename='whole_0.bag'):
+    def start_recording(self, data_root=None):
+        node_idx = self.next_node_idx
+        if data_root is None:
+            module_root = os.path.abspath(os.path.join(__file__, '..','..','..'))
+            base = os.path.join(module_root, 'data', str(node_idx))
+            #base = os.path.join(os.path.dirname(__file__), '..', 'data', str(node_idx))
+        else:
+            base = os.path.join(data_root, str(node_idx))
+        self.dirs = {
+            'image': os.path.join(base, 'image'),
+            'depth': os.path.join(base, 'depth_image'),
+            'pose': os.path.join(base, 'pose'),
+        }
+        for d in self.dirs.values():
+            os.makedirs(d, exist_ok=True)
         
-        bag_dir = os.path.join(os.path.dirname(__file__), 'data')
-        os.makedirs(bag_dir, exist_ok=True)
-        filepath = os.path.join(bag_dir, filename)
+        self.buf_images.clear()
+        self.buf_depths.clear()
+        self.buf_poses.clear()
+        self.recording = True
+        rospy.loginfo(f"[Exploration node] start_recording for node {node_idx}")
 
-        topics = ['/camera/image/compressed', '/state_estimation', '/object_markers', '/registered_scan', '/depth_image', '/semantic_depth_image']
-        command = ['rosbag', 'record', '-O', filepath] + topics
-        self.bag_process = subprocess.Popen(command) #, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        rospy.loginfo("rosbag recording started.")
+        # [for rosbag record]
+        # bag_dir = os.path.join(os.path.dirname(__file__), 'data')
+        # os.makedirs(bag_dir, exist_ok=True)
+        # filepath = os.path.join(bag_dir, filename)
+
+        # topics = ['/camera/image/compressed', '/state_estimation', '/object_markers', '/registered_scan', '/depth_image', '/semantic_depth_image']
+        # command = ['rosbag', 'record', '-O', filepath] + topics
+        # self.bag_process = subprocess.Popen(command) #, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        # rospy.loginfo("rosbag recording started.")
     
     def stop_recording(self):
-        if self.bag_process:
-            self.bag_process.send_signal(signal.SIGINT)
-            self.bag_process.wait()
-            rospy.loginfo("rosbag recording stopped.")
+        node_idx = self.next_node_idx
+        n = len(self.buf_images)
+
+        rospy.loginfo(f"[Recorder] stop_recording: dumping {n} frames for node {node_idx}")
+        
+        for i in range(n):
+            idx = f"{i:04d}"
+            # image
+            cv2.imwrite(os.path.join(self.dirs['image'],   f"{idx}.png"),
+                        self.buf_images[i])
+            # depth
+            cv2.imwrite(os.path.join(self.dirs['depth'],   f"{idx}.png"),
+                        self.buf_depths[i])
+            # pose
+            with open(os.path.join(self.dirs['pose'],      f"{idx}.json"), 'w') as f:
+                json.dump(self.buf_poses[i], f, indent=2)
+        
+        self.recording = False
+        rospy.loginfo(f"[Recorder] finished dumping data for node {node_idx}")
+
+        # [for rosbag record]
+        # if self.bag_process:
+        #     self.bag_process.send_signal(signal.SIGINT)
+        #     self.bag_process.wait()
+        #     rospy.loginfo("rosbag recording stopped.")
     
     def run(self):
         rospy.spin()

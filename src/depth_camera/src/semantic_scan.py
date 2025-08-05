@@ -109,7 +109,7 @@ def process():
         print("Skipping: odom not received yet")
         return
 
-    print(f"Trying to sync image_time={image_time:.3f}, odom_stack time={odom_stack[image_id_pointer][6]:.3f}")
+    #print(f"Trying to sync image_time={image_time:.3f}, odom_stack time={odom_stack[image_id_pointer][6]:.3f}")
 
     min_diff = float("inf")
     best_index = -1
@@ -157,7 +157,7 @@ def process():
     overlay_msg.header.frame_id = "camera"
     semantic_pub.publish(overlay_msg)
 
-    print(f"publish success ") #{np.sum(np.abs(depth_image - before))}
+    #print(f"publish success ") #{np.sum(np.abs(depth_image - before))}
 
 def main():
     global depth_pub, semantic_pub, camera_offset_z
