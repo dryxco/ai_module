@@ -5,6 +5,7 @@ import rospy, rospkg
 from std_msgs.msg import String, Int32MultiArray
 from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge
+import cv2
 import glob
 
 import hashlib, struct
@@ -134,25 +135,28 @@ class RelTRSGGNode:
             img_dirs = sorted(glob.glob(os.path.join(self.data_root, str(idx), "image", "*.png")))
 
             for _img_dir in img_dirs:
-                img_file = cv2.imread(_img_dir, cv2.IMREAD_UNCHANGED).astype(np.float32)
-                img_rgb = img_file[..., ::-1]
-                pil_img = PILImage.fromarray(img_rgb)
+                try:
+                    img_file = cv2.imread(_img_dir, cv2.IMREAD_UNCHANGED).astype(np.float32)
+                    img_rgb = img_file[..., ::-1]
+                    pil_img = PILImage.fromarray(img_rgb)
 
-                dev    = next(self.model.parameters()).device
-                trips  = infer_one_image(self.model, pil_img,
-                                        topk=self.topk,
-                                        conf_th=self.conf_th,
-                                        device=dev)
+                    dev    = next(self.model.parameters()).device
+                    trips  = infer_one_image(self.model, pil_img,
+                                            topk=self.topk,
+                                            conf_th=self.conf_th,
+                                            device=dev)
+                    
+                    stamp = Path(_img_dir).stem
+                    out = {"stamp": stamp, "num": len(trips), "triplets": trips}
+                    out_path = os.path.join(self.sgg_route, "sg_per_node", str(idx), f"sg_{stamp}.json")
+                    out_dir = os.path.dirname(out_path)
+                    os.makedirs(out_dir, exist_ok=True)
+                    with open(out_path, "w") as f:
+                        json.dump(trips, f, indent=2)
+                except Exception as e:
+                    print(f"{e}, error occured in generating sg in {_img_dir}")
                 
-                stamp = Path(_img_dir).stem
-                out = {"stamp": stamp, "num": len(trips), "triplets": trips}
-                out_path = os.path.join(self.sgg_route, "sg_per_node", str(idx), f"sg_{stamp}.json")
-                out_dir = os.path.dirname(out_path)
-                os.makedirs(out_dir, exist_ok=True)
-                with open(out_path, "w") as f:
-                    json.dump(trips, f, indent=2)
-            
-            print(f"finished to generate {len(img_dirs)} sg for every existing image in {idx} node")
+                print(f"finished to generate sg in {idx} node of {_img_dir}")
 
         # to generate merged sg for each node
         for idx in range(self.node_count):
