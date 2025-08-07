@@ -147,6 +147,8 @@ class RelTRSGGNode:
                 stamp = Path(_img_dir).stem
                 out = {"stamp": stamp, "num": len(trips), "triplets": trips}
                 out_path = os.path.join(self.sgg_route, "sg_per_node", str(idx), f"sg_{stamp}.json")
+                out_dir = os.path.dirname(out_path)
+                os.makedirs(out_dir, exist_ok=True)
                 with open(out_path, "w") as f:
                     json.dump(trips, f, indent=2)
             
