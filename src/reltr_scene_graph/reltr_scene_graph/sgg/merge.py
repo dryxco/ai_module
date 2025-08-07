@@ -70,6 +70,8 @@ def merge_folder(json_dir=JSON_DIR, out_json=OUT_JSON, out_png = OUT_PNG):
     global global_nodes, global_edges, label_cnt, id2idx
     # reinitialize
     global_nodes, global_edges = [], []
+    label_cnt = Counter()
+    id2idx = {}
     label_cnt.clear()
     id2idx.clear()
 
