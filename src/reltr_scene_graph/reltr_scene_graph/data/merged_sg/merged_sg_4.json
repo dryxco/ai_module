@@ -1,0 +1,138 @@
+{
+  "nodes": [
+    {
+      "id": "flower1",
+      "label": "flower",
+      "bbox": [
+        1755.49169921875,
+        293.20184326171875,
+        1911.0325520833333,
+        433.2644449869792
+      ]
+    },
+    {
+      "id": "vase1",
+      "label": "vase",
+      "bbox": [
+        1765.965087890625,
+        424.5540262858073,
+        1850.013671875,
+        476.35854085286456
+      ]
+    },
+    {
+      "id": "vase2",
+      "label": "vase",
+      "bbox": [
+        706.4295043945312,
+        387.19017333984374,
+        770.2378295898437,
+        452.6397766113281
+      ]
+    },
+    {
+      "id": "table1",
+      "label": "table",
+      "bbox": [
+        581.0245361328125,
+        395.66229248046875,
+        856.5792304144966,
+        531.175072564019
+      ]
+    },
+    {
+      "id": "room1",
+      "label": "room",
+      "bbox": [
+        2.2802352905273438,
+        -0.5169105529785156,
+        1920.5113525390625,
+        638.2003784179688
+      ]
+    },
+    {
+      "id": "flower2",
+      "label": "flower",
+      "bbox": [
+        458.447265625,
+        312.29302978515625,
+        549.3152465820312,
+        382.392822265625
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "subject": "flower1",
+      "object": "vase1",
+      "predicate": "in",
+      "confidence": 0.4618833661079407
+    },
+    {
+      "subject": "vase2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.1641402393579483
+    },
+    {
+      "subject": "table1",
+      "object": "room1",
+      "predicate": "in",
+      "confidence": 0.1296791434288025
+    },
+    {
+      "subject": "flower1",
+      "object": "vase1",
+      "predicate": "in",
+      "confidence": 0.4310491979122162
+    },
+    {
+      "subject": "table1",
+      "object": "room1",
+      "predicate": "in",
+      "confidence": 0.10228670388460159
+    },
+    {
+      "subject": "flower2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.0955762267112732
+    },
+    {
+      "subject": "vase2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.07632388174533844
+    },
+    {
+      "subject": "flower1",
+      "object": "vase1",
+      "predicate": "in",
+      "confidence": 0.3141760528087616
+    },
+    {
+      "subject": "vase2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.3091634511947632
+    },
+    {
+      "subject": "vase2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.2581881582736969
+    },
+    {
+      "subject": "vase2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.11741320788860321
+    },
+    {
+      "subject": "table1",
+      "object": "room1",
+      "predicate": "in",
+      "confidence": 0.05562674254179001
+    }
+  ]
+}
