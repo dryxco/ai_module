@@ -136,8 +136,12 @@ class RelTRSGGNode:
 
             for _img_dir in img_dirs:
                 try:
-                    img_file = cv2.imread(_img_dir, cv2.IMREAD_UNCHANGED).astype(np.float32)
-                    img_rgb = img_file[..., ::-1]
+                    #img_file = cv2.imread(_img_dir, cv2.IMREAD_UNCHANGED).astype(np.float32)
+                    img_bgr = cv2.imread(_img_dir, cv2.IMREAD_COLOR)
+                    if img_bgr is None:
+                        raise RuntimeError(f"Failed to load image {_img_dir}")
+                    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                    img_rgb = img_rgb.astype(np.uint8)
                     pil_img = PILImage.fromarray(img_rgb)
 
                     dev    = next(self.model.parameters()).device
