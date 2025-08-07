@@ -5,6 +5,7 @@ import rospy, rospkg
 from std_msgs.msg import String, Int32MultiArray
 from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge
+import glob
 
 import hashlib, struct
 from collections import defaultdict
