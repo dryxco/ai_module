@@ -1,8 +1,0 @@
-prefix=/home/junwon/CMU-VLA-Challenge/ai_module/install
-
-Name: depth_camera
-Description: Description of depth_camera
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

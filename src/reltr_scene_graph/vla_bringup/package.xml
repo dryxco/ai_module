@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>vla_bringup</name>
+  <name>vla_bringup_reltr</name>
   <version>0.0.0</version>
   <description>The vla_bringup package</description>
 
