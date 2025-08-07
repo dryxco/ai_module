@@ -5,6 +5,7 @@
 # This file includes the relevant testing commands required for 
 # testing this directory and lists subdirectories to be tested as well.
 subdirs("gtest")
+subdirs("SGG")
 subdirs("dummy_vlm")
 subdirs("planning_node")
 subdirs("depth_camera")

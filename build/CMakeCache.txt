@@ -373,6 +373,12 @@ RT_LIBRARY:FILEPATH=/usr/lib/x86_64-linux-gnu/librt.so
 //Enable debian style python package layout
 SETUPTOOLS_DEB_LAYOUT:BOOL=ON
 
+//Value Computed by CMake
+SGG_BINARY_DIR:STATIC=/home/junwon/CMU-VLA-Challenge/ai_module/build/SGG
+
+//Value Computed by CMake
+SGG_SOURCE_DIR:STATIC=/home/junwon/CMU-VLA-Challenge/ai_module/src/SGG
+
 //Name of the computer/site where compile is being run
 SITE:STRING=docker-desktop
 
@@ -717,7 +723,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=7
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=8
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP

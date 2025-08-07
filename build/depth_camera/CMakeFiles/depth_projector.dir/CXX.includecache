@@ -1,0 +1,14 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/junwon/CMU-VLA-Challenge/ai_module/src/depth_camera/src/depth_projector.cpp
+cmath
+-
+cstring
+-
+

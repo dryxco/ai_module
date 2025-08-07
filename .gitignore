@@ -1,5 +1,8 @@
-build/
-devel/
+ai_module/build/
+ai_module/devel/
 .vscode/
 *.pyc
-__pycache__/
+**/.vscode/**
+**/__pycache__/**
+*.pkl
+*.pth

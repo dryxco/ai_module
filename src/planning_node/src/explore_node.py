@@ -76,7 +76,8 @@ class ExplorationNode:
         rospy.Subscriber("/mode", String, self.mode_callback)
 
         self.pose_pub = rospy.Publisher('/way_point_with_heading', Pose2D, queue_size=1)
-        
+        self.mode_pub = rospy.Publisher('/exp_mode', String, queue_size=1)
+
         rospy.Timer(rospy.Duration(0.2), self.timer_callback)
         self.topic_buffer = rospy.Timer(rospy.Duration(1.0), self.buffer)
 
@@ -85,6 +86,10 @@ class ExplorationNode:
     def timer_callback(self, event):
         if not self.explore_stop:
             self.waypoint_planning()
+        else:
+            msg = String()
+            msg.data = "fin"
+            self.mode_pub.publish(msg)
     
     def buffer(self, event):
         # MST node 도착 직전에 buffer 시작, 직후에 buffer 종료
