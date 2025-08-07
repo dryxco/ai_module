@@ -3,6 +3,9 @@ import json, glob, os, math
 from pathlib import Path
 from collections import Counter
 import numpy as np
+# alias 에러 방지
+np.int   = int
+np.float = float
 
 JSON_DIR        = "sg_json"
 OUT_JSON        = "merged_sg.json"

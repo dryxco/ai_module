@@ -9,6 +9,9 @@ import torch
 from pathlib import Path
 from PIL import Image as PILImage
 import numpy as np
+# alias 에러 방지
+np.int   = int
+np.float = float
 
 PKG_ROOT = Path(rospkg.RosPack().get_path('reltr_scene_graph'))
 # RelTR 루트를 파이썬 경로에 등록 (RelTR_SGG가 내부에서 RelTR.models.* import 함)

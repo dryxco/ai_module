@@ -11,6 +11,11 @@ from std_msgs.msg import String
 import sys
 from pathlib import Path
 
+import numpy as np
+# alias 에러 방지
+np.int   = int
+np.float = float
+
 PKG_ROOT = Path(rospkg.RosPack().get_path('reltr_scene_graph'))
 sys.path.append(str(PKG_ROOT))
 

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 import rospy
 import pickle
+import numpy as np
+# alias 에러 방지
+np.int   = int
+np.float = float
 import networkx as nx
 import heapq
 import sensor_msgs.point_cloud2 as pc2
