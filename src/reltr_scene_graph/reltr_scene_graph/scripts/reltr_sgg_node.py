@@ -43,9 +43,13 @@ class RelTRSGGNode:
         self.prev_edge_hash = None
         self.new_data = False
 
-        self.data_root  = rospy.get_param("~data_root", "/home/junwon/CMU-VLA-Challenge/ai_module/data")
+        pkg_root = Path(rospkg.RosPack().get_path('reltr_scene_graph'))
+        data_dir = pkg_root.parents[2] / 'data'
+        sgg_route = pkg_root.parents[0] / 'reltr_scene_graph/data'
+        self.data_root = rospy.get_param("~data_root", str(data_dir))
+
         self.node_count = len(os.listdir(self.data_root))
-        self.sgg_route = rospy.get_param("~sgg_route", "/home/junwon/CMU-VLA-Challenge/ai_module/src/reltr_scene_graph/reltr_scene_graph/data")
+        self.sgg_route = rospy.get_param("~sgg_route", str(sgg_route))
 
         # 모델 로드 (RelTR_SGG 방식)
         self.model = build_model()
