@@ -24,9 +24,9 @@ def ctr_dist_cyclic(b1, b2):
     dy  = abs(c1y - c2y)
     return math.hypot(dx, dy)
 
-global_nodes, global_edges = [], []
-label_cnt                   = Counter()
-id2idx                      = {}
+# global_nodes, global_edges = [], []
+# label_cnt                   = Counter()
+# id2idx                      = {}
 
 def match_node(label, bbox):
     best_idx, best_dist = None, float('inf')
@@ -67,6 +67,12 @@ def merge_one_triplet(trip):
     })
 
 def merge_folder(json_dir=JSON_DIR, out_json=OUT_JSON, out_png = OUT_PNG):
+    global global_nodes, global_edges, label_cnt, id2idx
+    # reinitialize
+    global_nodes, global_edges = [], []
+    label_cnt.clear()
+    id2idx.clear()
+
     for fp in sorted(glob.glob(os.path.join(json_dir, "sg*.json"))):
         with open(fp, encoding="utf-8") as f:
             cur = json.load(f)
