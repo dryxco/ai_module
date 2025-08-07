@@ -311,7 +311,7 @@ if __name__ == "__main__":
             merger.align_depth_pose(idx)
 
     merger.update_node_features()
-    # merger.iterative_merge(threshold=0.9)  # 필요 시 호출
+    merger.iterative_merge(threshold=0.6)  # 필요 시 호출
     merger.save_graph()
 
     print(f"Scene graph saved to {out_json}")

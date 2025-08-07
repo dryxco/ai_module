@@ -66,7 +66,7 @@ def merge_one_triplet(trip):
         "confidence": trip.get("confidence", 1.0)
     })
 
-def merge_folder(json_dir=JSON_DIR):
+def merge_folder(json_dir=JSON_DIR, out_json=OUT_JSON, out_png = OUT_PNG):
     for fp in sorted(glob.glob(os.path.join(json_dir, "sg*.json"))):
         with open(fp, encoding="utf-8") as f:
             cur = json.load(f)
@@ -80,13 +80,19 @@ def merge_folder(json_dir=JSON_DIR):
         n.pop("_sum", None); n.pop("_cnt", None)
 
     merged = {"nodes": pruned_nodes, "edges": global_edges}
-    Path(OUT_JSON).write_text(json.dumps(merged, indent=2))
-    print(f"✅ merged graph → {OUT_JSON} | "
+
+    out_dir = os.path.dirname(out_json)
+    os.makedirs(out_dir, exist_ok=True)
+    with open(out_json, "w") as f:
+        json.dump(merged, f, indent=2)
+    
+    #Path(OUT_JSON).write_text(json.dumps(merged, indent=2))
+    print(f"✅ merged graph → {out_json} | "
           f"nodes:{len(pruned_nodes)} edges:{len(global_edges)}")
 
-    visualize(merged)
+    visualize(merged, out_png = out_png)
 
-def visualize(g):
+def visualize(g, out_png = OUT_PNG):
     try:
         import matplotlib.pyplot as plt
         import networkx as nx
@@ -115,8 +121,11 @@ def visualize(g):
                                  edge_labels=edge_labels,
                                  font_size=7, font_color="blue")
     plt.axis("off"); plt.tight_layout()
-    plt.savefig(OUT_PNG, dpi=300)
-    print(f"preview saved → {OUT_PNG}")
+
+    out_dir = os.path.dirname(out_png)
+    os.makedirs(out_dir, exist_ok=True)
+    plt.savefig(out_png, dpi=300)
+    print(f"preview saved → {out_png}")
 
 if __name__ == "__main__":
     merge_folder()
