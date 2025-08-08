@@ -187,9 +187,8 @@ class RelTRSGGNode:
 
         # align image & depth & pose
         for idx in range(len(os.listdir(merged_dir))):
-            if idx.isdigit():
-                all_merger.align_depth_pose(idx)
-                print(f"{idx} depth, img, pose aligned")
+            all_merger.align_depth_pose(idx)
+            print(f"{idx} depth, img, pose aligned")
         
         all_merger.update_node_features()
         all_merger.iterative_merge(threshold=0.03)  # 필요 시 호출
