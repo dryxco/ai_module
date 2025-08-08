@@ -244,7 +244,7 @@ class SceneGraphMerger:
         merged_pc = np.vstack([pc_u, pc_v]) if pc_u.size and pc_v.size else (pc_u if pc_v.size == 0 else pc_v)
         merged_pc = self.voxel_downsample(merged_pc, self.voxel_size)
 
-        self.nodes[ui]["pc"] = merged_pc
+        #self.nodes[ui]["pc"] = merged_pc
         # update edges
         new_edges = []
         for e in self.edges:
@@ -288,7 +288,7 @@ class SceneGraphMerger:
             new_nodes.append({
                 "id": new_id,
                 "label": node["label"],
-                #"bbox": node["bbox"]
+                "pc" : node["pc"]
             })
         
         new_edges = []
