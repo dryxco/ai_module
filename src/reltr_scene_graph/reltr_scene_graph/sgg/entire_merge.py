@@ -293,6 +293,9 @@ class SceneGraphMerger:
             })
 
         final = {"nodes": new_nodes, "edges": new_edges}
+        
+        out_dir = os.path.dirname(self.out_json)
+        os.makedirs(out_dir, exist_ok=True)
         with open(self.out_json, 'w') as f:
             json.dump(final, f, indent=2)
 

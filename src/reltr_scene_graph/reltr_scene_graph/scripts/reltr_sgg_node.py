@@ -29,6 +29,7 @@ sys.path.insert(0, str(PKG_ROOT / 'sgg'))
 
 from RelTR_SGG import build_model, load_checkpoint, infer_one_image
 from merge import merge_folder  
+from entire_merge import SceneGraphMerger
 
 class RelTRSGGNode:
     def __init__(self):
@@ -82,6 +83,7 @@ class RelTRSGGNode:
         else :
             if not self.if_process :
                 self.generate_all_scene_graphs()
+
                 self.if_process = True
             if self.new_data:
                 self.if_process = False
@@ -171,7 +173,29 @@ class RelTRSGGNode:
             merge_folder(json_dir=json_dir, out_json=merged_sg_json, out_png = merged_png)
         
         print("finished to generate merged sg for each node")
+    
+    @torch.no_grad()
+    def merge_all_graph(self):
+        merged_dir = os.path.join(self.sgg_route, "merged_sg")
+        data_root = self.data_root
+        out_json = os.path.join(self.sgg_route, "all_merged_sg")
 
+        all_merger = SceneGraphMerger(merged_dir, data_root, out_json)
+
+        graphs = all_merger.load_merged_graphs()
+        all_merger.build_global_sg(graphs)
+
+        # align image & depth & pose
+        for idx in os.listdir(merged_dir):
+            if idx.isdigit():
+                all_merger.align_depth_pose(idx)
+
+        all_merger.update_node_features()
+        all_merger.iterative_merge(threshold=0.6)  # 필요 시 호출
+        all_merger.save_graph()
+
+        print(f"Scene graph saved to {out_json}")
+    
 def main():
     rospy.init_node("reltr_sgg_node")
     RelTRSGGNode()

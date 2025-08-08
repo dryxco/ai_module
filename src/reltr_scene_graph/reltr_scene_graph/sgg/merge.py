@@ -40,12 +40,21 @@ def match_node(label, bbox):
 
 def upsert_node(label, bbox):
     mi = match_node(label, bbox)
+    b = [float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])]
+    
     if mi is not None:
         node = global_nodes[mi]
         if label not in STATIC_LABELS:
-            node["_sum"] += np.array(bbox)
-            node["_cnt"] += 1
-            node["bbox"]  = (node["_sum"] / node["_cnt"]).tolist()
+        #     node["_sum"] += np.array(bbox)
+        #     node["_cnt"] += 1
+        #     node["bbox"]  = (node["_sum"] / node["_cnt"]).tolist()
+            nb = node["bbox"]
+            node["bbox"] = [
+                    min(nb[0], b[0]),  # x1
+                    min(nb[1], b[1]),  # y1
+                    max(nb[2], b[2]),  # x2
+                    max(nb[3], b[3])   # y2
+            ]
         return node["id"]
 
     label_cnt[label] += 1
