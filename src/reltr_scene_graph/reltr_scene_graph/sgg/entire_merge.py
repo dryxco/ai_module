@@ -88,7 +88,7 @@ class SceneGraphMerger:
             return False
         
         return True
-        
+
     def extract_pointcloud_from_bbox(self, depth, pose, bbox, camera_offset_z=0.0):
         image_width, image_height = depth.shape[1], depth.shape[0]
 
@@ -173,10 +173,9 @@ class SceneGraphMerger:
         return hits / len(neighs)
 
     def nnratio(self, pc1, pc2):
-        # 더 보수적으로: 두 방향의 최소값 (혹은 평균)
         r12 = self.nnratio_oneway(pc1, pc2)
         r21 = self.nnratio_oneway(pc2, pc1)
-        return min(r12, r21)
+        return np.mean([r12, r21])
     
     def voxel_downsample(self, pc: np.ndarray, voxel_size: float = None) -> np.ndarray:
         """(N,3) 포인트클라우드를 voxel 격자(크기 m)로 다운샘플링해서
