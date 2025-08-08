@@ -292,7 +292,7 @@ class SceneGraphMerger:
             new_id = f"{label}{idx}"
             next_idx[label] += 1
             old2new[old_id] = new_id
-            pc = n.get("pc")
+            pc = node.get("pc")
             if isinstance(pc, np.ndarray) and pc.shape[0] > 0:
                 idx = np.random.choice(pc.shape[0], 10, replace=False)
                 pc_selected = pc[idx]
