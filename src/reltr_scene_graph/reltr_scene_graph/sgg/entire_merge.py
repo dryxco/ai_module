@@ -45,6 +45,7 @@ class SceneGraphMerger:
                     "orig_id": n["id"],
                     "label": n["label"],
                     "bbox": n["bbox"],
+                    "bboxes" : n["bboxes"],
                     "pc": None,
                     "img_stat" : None,
                 }
