@@ -12,6 +12,7 @@ import numpy as np
 import cv2
 import tf
 from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import DBSCAN
 from scipy.spatial import cKDTree
 
 STATIC_LABELS   = {"room", "building"}
@@ -24,6 +25,9 @@ class SceneGraphMerger:
         self.out_json = out_json
         self.voxel_size = voxel_size
         self.nn_radius = nn_radius
+        self.cluster_eps = 1.5 * self.nn_radius     # DBSCAN 반경 (m) ~= 1~2*nn_radius
+        self.cluster_min_samples = 3 #getattr(self, "cluster_min_samples", 20)
+        self.cluster_max_points = 10000 #getattr(self, "cluster_max_points", 10000)
 
         self.nodes = {}
         self.edges = []
@@ -172,6 +176,31 @@ class SceneGraphMerger:
         _, idxs = np.unique(keys, axis=0, return_index=True)
         self.nodes[node_id]["pc"] = inliers[idxs]
     
+    def _cluster_pc(self, P: np.ndarray):
+        P = np.asarray(P, np.float32).reshape(-1, 3)
+        N = P.shape[0]
+        if N == 0:
+            return []
+        
+        if N > self.cluster_max_points:
+            idx = np.random.choice(N, self.cluster_max_points, replace=False)
+            P = P[idx]
+            N = P.shape[0]
+
+        min_samples = self.cluster_min_samples
+        if N <= min_samples:
+            return [P]
+
+        eps = self.cluster_eps
+        
+        adj_min_samples = max(2, min_samples)  # 혹은 max(2, int(0.01*N))
+
+        db = DBSCAN(eps=eps, min_samples=adj_min_samples).fit(P)
+        labels = db.labels_
+        clusters = [P[labels == k] for k in np.unique(labels) if k != -1]
+
+        return clusters if clusters else [P]
+
     def nnratio_oneway(self, A, B):
         if A.size == 0 or B.size == 0:
             return 0.0
@@ -183,9 +212,21 @@ class SceneGraphMerger:
         return hits / len(neighs)
 
     def nnratio(self, pc1, pc2):
-        r12 = self.nnratio_oneway(pc1, pc2)
-        r21 = self.nnratio_oneway(pc2, pc1)
-        return max(r12, r21)
+        pc1 = np.asarray(pc1, np.float32).reshape(-1, 3)
+        pc2 = np.asarray(pc2, np.float32).reshape(-1, 3)
+        if pc1.size == 0 or pc2.size == 0:
+            return 0.0
+
+        cl1 = self._cluster_pc(pc1)
+        cl2 = self._cluster_pc(pc2)
+
+        best = 0.0
+        for A in cl1:
+            for B in cl2:
+                r12 = self.nnratio_oneway(A, B)
+                r21 = self.nnratio_oneway(B, A)
+                best = max(best, r12, r21)
+        return float(best)
     
     def voxel_downsample(self, pc: np.ndarray, voxel_size: float = None) -> np.ndarray:
         """(N,3) 포인트클라우드를 voxel 격자(크기 m)로 다운샘플링해서
