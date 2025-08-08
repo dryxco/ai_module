@@ -17,7 +17,7 @@ from scipy.spatial import cKDTree
 STATIC_LABELS   = {"room", "building"}
 
 class SceneGraphMerger:
-    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.15):
+    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.2):
         self.static_labels = {"room", "building"}
         self.merged_dir = merged_dir
         self.data_root = data_root
@@ -86,7 +86,9 @@ class SceneGraphMerger:
         
         if self.nodes[id1]["label"] != self.nodes[id2]["label"]:
             return False
-
+        
+        return True
+        
     def extract_pointcloud_from_bbox(self, depth, pose, bbox, camera_offset_z=0.0):
         image_width, image_height = depth.shape[1], depth.shape[0]
 
@@ -276,7 +278,7 @@ class SceneGraphMerger:
 
             new_nodes.append({
                 "id": new_id,
-                "orig_id": node["label"],
+                "label": node["label"],
                 #"bbox": node["bbox"]
             })
         
