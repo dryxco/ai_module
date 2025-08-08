@@ -83,7 +83,7 @@ class RelTRSGGNode:
         else :
             if not self.if_process :
                 self.generate_all_scene_graphs()
-
+                self.merge_all_graph()
                 self.if_process = True
             if self.new_data:
                 self.if_process = False
