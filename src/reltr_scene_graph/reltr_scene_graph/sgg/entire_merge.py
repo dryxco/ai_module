@@ -12,11 +12,12 @@ import numpy as np
 import cv2
 import tf
 from sklearn.neighbors import NearestNeighbors
+from scipy.spatial import cKDTree
 
 STATIC_LABELS   = {"room", "building"}
 
 class SceneGraphMerger:
-    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.1):
+    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.2):
         self.merged_dir = merged_dir
         self.data_root = data_root
         self.out_json = out_json
@@ -151,9 +152,14 @@ class SceneGraphMerger:
     def nnratio(self, pc1, pc2):
         if pc1.size == 0 or pc2.size == 0:
             return 0.0
-        nbrs = NearestNeighbors(radius=self.nn_radius).fit(pc2)
-        dists, _ = nbrs.kneighbors(pc1)
-        return float(np.mean(dists[:, 0] <= self.nn_radius))
+        pc1 = np.asarray(pc1, dtype=np.float32).reshape(-1, 3)
+        pc2 = np.asarray(pc2, dtype=np.float32).reshape(-1, 3)
+
+        tree = cKDTree(pc2)
+        # 각 점에 대해 반경 r 안의 이웃 인덱스 리스트 반환
+        neighs = tree.query_ball_point(pc1, r=self.nn_radius)
+        hits = sum(1 for idxs in neighs if idxs)  # 비어있지 않으면 hit
+        return hits / len(neighs)
     
     def extract_statistics_patch(self, node_id,
                              hist_bins: int = 8) -> np.ndarray:
