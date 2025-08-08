@@ -76,20 +76,35 @@ class SceneGraphMerger:
         self.idp_pair[node_idx] = idp
 
     def extract_pointcloud_from_bbox(self, depth, pose, bbox, camera_offset_z=0.0):
-        xmin, ymin, xmax, ymax = map(int, bbox)
-        patch = depth[ymin:ymax, xmin:xmax]
-        h, w = patch.shape
-        if h == 0 or w == 0:
-            return np.empty((0, 3), dtype=np.float32)
+        image_width, image_height = depth.shape[1], depth.shape[0]
 
-        u_coord, v_coord = np.meshgrid(np.arange(xmin, xmax), np.arange(ymin, ymax))
+        x0 = int(np.floor(bbox[0])); y0 = int(np.floor(bbox[1]))
+        x1 = int(np.ceil (bbox[2])); y1 = int(np.ceil (bbox[3]))
+        
+        x0 = max(0, min(x0, W-1))
+        x1 = max(0, min(x1, W))
+        y0 = max(0, min(y0, H-1))
+        y1 = max(0, min(y1, H))
+        
+        if x1 <= x0 or y1 <= y0:
+            rospy.logwarn("Empty/invalid bbox after clipping")
+            return np.empty((0,3), dtype=np.float32)
+        
+        patch = depth[y0:y1, x0:x1]
+        h, w  = patch.shape
+        ys = np.arange(y0, y0 + h)
+        xs = np.arange(x0, x0 + w)
+        u_coord, v_coord = np.meshgrid(xs, ys)
+
+        d = patch.reshape(-1).astype(np.float32)
         u = u_coord.flatten()
         v = v_coord.flatten()
-        d = patch.flatten() / 1000.0  # mm to meters
+        mask = np.isfinite(d) & (d > 0)
+            if not np.any(mask):
+                return np.empty((0,3), dtype=np.float32)
+            u, v, d = u[mask], v[mask], d[mask]
 
-        mask = d > 0
-        u, v, d = u[mask], v[mask], d[mask]
-        image_width, image_height = depth.shape[1], depth.shape[0]
+        d = d / 1000.0  # mm to meters
 
         theta = math.pi - 2 * math.pi * u / image_width
         phi = math.pi/2 - math.pi * v / image_height
@@ -99,15 +114,11 @@ class SceneGraphMerger:
         Z = d * np.sin(phi)
 
         pts_cam = np.vstack([X, Y, Z, np.ones_like(X)])
-        trans = tf.transformations.translation_matrix(
-            [pose["position"]["x"], pose["position"]["y"], pose["position"]["z"] + camera_offset_z]
-        )
-        rot = tf.transformations.quaternion_matrix([
-            pose["orientation"]["x"], pose["orientation"]["y"],
-            pose["orientation"]["z"], pose["orientation"]["w"]
-        ])
-        T = trans.dot(rot)
-        pts_map = T.dot(pts_cam)
+        pos = pose["position"]; ori = pose["orientation"]
+        T = (tf.transformations.translation_matrix([pos["x"], pos["y"], pos["z"] + camera_offset_z]) @
+            tf.transformations.quaternion_matrix([ori["x"], ori["y"], ori["z"], ori["w"]]))
+        pts_map = T @ pts_cam
+        
         return pts_map[:3, :].T.astype(np.float32)
 
     def extract_pc(self, node_id):

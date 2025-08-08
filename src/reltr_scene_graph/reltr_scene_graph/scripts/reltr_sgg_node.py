@@ -186,9 +186,13 @@ class RelTRSGGNode:
         all_merger.build_global_sg(graphs)
 
         # align image & depth & pose
-        for idx in range(len(os.listdir(merged_dir))):
-            all_merger.align_depth_pose(idx)
-            print(f"{idx} depth, img, pose aligned")
+        for idx in os.listdir(data_root):
+            try:
+                idx = int(idx)
+                all_merger.align_depth_pose(idx)
+                print(f"{idx} depth, img, pose aligned")
+            except Exception as e:
+                print(f"{e}, error occurred in align data")
         
         all_merger.update_node_features()
         all_merger.iterative_merge(threshold=0.03)  # 필요 시 호출
