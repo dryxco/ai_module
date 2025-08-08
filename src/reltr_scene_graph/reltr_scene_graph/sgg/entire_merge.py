@@ -18,7 +18,7 @@ from scipy.spatial import cKDTree
 STATIC_LABELS   = {"room", "building"}
 
 class SceneGraphMerger:
-    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.2):
+    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.4):
         self.static_labels = {"room", "building"}
         self.merged_dir = merged_dir
         self.data_root = data_root
@@ -201,30 +201,27 @@ class SceneGraphMerger:
 
         return clusters if clusters else [P]
 
-    def nnratio_oneway(self, A, B):
-        if A.size == 0 or B.size == 0:
-            return 0.0
-        A = np.asarray(A, dtype=np.float32).reshape(-1, 3)
-        B = np.asarray(B, dtype=np.float32).reshape(-1, 3)
-        tree = cKDTree(B)
-        neighs = tree.query_ball_point(A, r=self.nn_radius)
+    def _nnratio_oneway_aligned(self, A, B):
+        if len(A)==0 or len(B)==0: return 0.0
+        ca, cb = A.mean(axis=0), B.mean(axis=0)
+        A0, B0 = A - ca, B - cb
+        tree = cKDTree(B0)
+        neighs = tree.query_ball_point(A0, r=self.nn_radius)
         hits = sum(1 for idxs in neighs if idxs)
         return hits / len(neighs)
 
     def nnratio(self, pc1, pc2):
-        pc1 = np.asarray(pc1, np.float32).reshape(-1, 3)
-        pc2 = np.asarray(pc2, np.float32).reshape(-1, 3)
-        if pc1.size == 0 or pc2.size == 0:
-            return 0.0
+        pc1 = np.asarray(pc1, np.float32).reshape(-1,3)
+        pc2 = np.asarray(pc2, np.float32).reshape(-1,3)
+        if pc1.size==0 or pc2.size==0: return 0.0
 
         cl1 = self._cluster_pc(pc1)
         cl2 = self._cluster_pc(pc2)
-
         best = 0.0
         for A in cl1:
             for B in cl2:
-                r12 = self.nnratio_oneway(A, B)
-                r21 = self.nnratio_oneway(B, A)
+                r12 = self._nnratio_oneway_aligned(A,B)
+                r21 = self._nnratio_oneway_aligned(B,A)
                 best = max(best, r12, r21)
         return float(best)
     
