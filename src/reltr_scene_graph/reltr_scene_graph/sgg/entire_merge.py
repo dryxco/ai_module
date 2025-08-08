@@ -232,10 +232,9 @@ class SceneGraphMerger:
                 sim[(id_j, id_i)] = score
         return sim
 
-    def merge_pair(self, ui, uj):
-        # merge bbox
-        b1, b2 = self.nodes[ui]["bbox"], self.nodes[uj]["bbox"]
-        self.nodes[ui]["bbox"] = [(a + b) / 2 for a, b in zip(b1, b2)]
+    def merge_pair(self, ui, uj, sim_score = 0.0):
+        self.nodes[ui]["sim"] = sim_score
+        self.nodes[ui]["pc"] = np.vstack([self.nodes[ui]["pc"], self.nodes[uj]["pc"]])
         # update edges
         new_edges = []
         for e in self.edges:
@@ -256,8 +255,9 @@ class SceneGraphMerger:
             candidates = [(pair, score) for pair, score in sim.items() if score >= threshold]
             if not candidates: break
             (ui, uj), _ = max(candidates, key=lambda x: x[1])
-            self.merge_pair(ui, uj)
+            self.merge_pair(ui, uj, sim[(ui, uj)])
             self.update_node_features()
+            print(f"{(ui, uj)} merged, it similarity {sim[(ui, uj)]}")
             sim = self.compute_all_sim()
 
     def save_graph(self):
@@ -314,7 +314,7 @@ if __name__ == "__main__":
             merger.align_depth_pose(idx)
 
     merger.update_node_features()
-    merger.iterative_merge(threshold=0.6)  # 필요 시 호출
+    merger.iterative_merge(threshold=0.05)  # 필요 시 호출
     merger.save_graph()
 
     print(f"Scene graph saved to {out_json}")

@@ -178,7 +178,7 @@ class RelTRSGGNode:
     def merge_all_graph(self):
         merged_dir = os.path.join(self.sgg_route, "merged_sg")
         data_root = self.data_root
-        out_json = os.path.join(self.sgg_route, "all_merged_sg")
+        out_json = os.path.join(self.sgg_route, "all_merged_sg", "all_merged_sg.json")
 
         all_merger = SceneGraphMerger(merged_dir, data_root, out_json)
 
