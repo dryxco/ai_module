@@ -99,11 +99,12 @@ class SceneGraphMerger:
         d = patch.reshape(-1).astype(np.float32)
         u = u_coord.flatten()
         v = v_coord.flatten()
-        mask = np.isfinite(d) & (d > 0)
-            if not np.any(mask):
-                return np.empty((0,3), dtype=np.float32)
-            u, v, d = u[mask], v[mask], d[mask]
 
+        mask = np.isfinite(d) & (d > 0)
+        if not np.any(mask):
+            return np.empty((0,3), dtype=np.float32)
+        
+        u, v, d = u[mask], v[mask], d[mask]
         d = d / 1000.0  # mm to meters
 
         theta = math.pi - 2 * math.pi * u / image_width
@@ -118,7 +119,7 @@ class SceneGraphMerger:
         T = (tf.transformations.translation_matrix([pos["x"], pos["y"], pos["z"] + camera_offset_z]) @
             tf.transformations.quaternion_matrix([ori["x"], ori["y"], ori["z"], ori["w"]]))
         pts_map = T @ pts_cam
-        
+
         return pts_map[:3, :].T.astype(np.float32)
 
     def extract_pc(self, node_id):
