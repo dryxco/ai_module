@@ -111,7 +111,7 @@ def merge_folder(json_dir=JSON_DIR, out_json=OUT_JSON, out_png=OUT_PNG):
     Path(out_json).write_text(json.dumps(merged, indent=2))
     print(f"merged graph → {out_json} | nodes:{len(pruned_nodes)} edges:{len(global_edges)}")
 
-    visualize(merged) 
+    visualize(merged, out_png)
 
 def visualize(g, out_png = OUT_PNG):
     try:
