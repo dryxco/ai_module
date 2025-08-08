@@ -17,7 +17,8 @@ from scipy.spatial import cKDTree
 STATIC_LABELS   = {"room", "building"}
 
 class SceneGraphMerger:
-    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.2):
+    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.15):
+        self.static_labels = {"room", "building"}
         self.merged_dir = merged_dir
         self.data_root = data_root
         self.out_json = out_json
@@ -75,6 +76,16 @@ class SceneGraphMerger:
             idp["depth"].append(depth)
             idp["pose"].append(pose)
         self.idp_pair[node_idx] = idp
+
+    def _is_static(self, node_id):
+        return self.nodes[node_id].get("label") in self.static_labels
+    
+    def _pair_valid(self, id1, id2):
+        if self._is_static(id1) or self._is_static(id2):
+            return False
+        
+        if self.nodes[id1]["label"] != self.nodes[id2]["label"]:
+            return False
 
     def extract_pointcloud_from_bbox(self, depth, pose, bbox, camera_offset_z=0.0):
         image_width, image_height = depth.shape[1], depth.shape[0]
@@ -148,92 +159,51 @@ class SceneGraphMerger:
         keys = np.floor(inliers / self.voxel_size).astype(np.int32)
         _, idxs = np.unique(keys, axis=0, return_index=True)
         self.nodes[node_id]["pc"] = inliers[idxs]
+    
+    def nnratio_oneway(self, A, B):
+        if A.size == 0 or B.size == 0:
+            return 0.0
+        A = np.asarray(A, dtype=np.float32).reshape(-1, 3)
+        B = np.asarray(B, dtype=np.float32).reshape(-1, 3)
+        tree = cKDTree(B)
+        neighs = tree.query_ball_point(A, r=self.nn_radius)
+        hits = sum(1 for idxs in neighs if idxs)
+        return hits / len(neighs)
 
     def nnratio(self, pc1, pc2):
-        if pc1.size == 0 or pc2.size == 0:
-            return 0.0
-        pc1 = np.asarray(pc1, dtype=np.float32).reshape(-1, 3)
-        pc2 = np.asarray(pc2, dtype=np.float32).reshape(-1, 3)
-
-        tree = cKDTree(pc2)
-        # 각 점에 대해 반경 r 안의 이웃 인덱스 리스트 반환
-        neighs = tree.query_ball_point(pc1, r=self.nn_radius)
-        hits = sum(1 for idxs in neighs if idxs)  # 비어있지 않으면 hit
-        return hits / len(neighs)
+        # 더 보수적으로: 두 방향의 최소값 (혹은 평균)
+        r12 = self.nnratio_oneway(pc1, pc2)
+        r21 = self.nnratio_oneway(pc2, pc1)
+        return min(r12, r21)
     
-    def extract_statistics_patch(self, node_id,
-                             hist_bins: int = 8) -> np.ndarray:
+    def voxel_downsample(self, pc: np.ndarray, voxel_size: float = None) -> np.ndarray:
+        """(N,3) 포인트클라우드를 voxel 격자(크기 m)로 다운샘플링해서
+        각 voxel의 중심(centroid)을 대표점으로 반환."""
+        if pc is None or pc.size == 0:
+            return np.empty((0, 3), dtype=np.float32)
+        if voxel_size is None:
+            voxel_size = self.voxel_size
         
-        orig, idx = node_id.rsplit('_', 1)
-        idx = int(idx)
-        dp = self.idp_pair.get(idx)
-
-        if dp is None:
-            self.nodes[node_id]["img_stat"] = np.zeros(1 + 3*hist_bins + 2, dtype=np.float32)
-            return
+        pc = np.asarray(pc, dtype=np.float32)
+        mask = np.isfinite(pc).all(axis=1)
+        pc = pc[mask]
+        if pc.size == 0:
+            return np.empty((0, 3), dtype=np.float32)
         
-        bbox = self.nodes[node_id]["bbox"]
+        keys = np.floor(pc / voxel_size).astype(np.int64)  # (N,3)
 
-        feat_list = []
-        for img in dp["image"]:
-            xmin, ymin, xmax, ymax = map(int, bbox)
-            patch = img[ymin:ymax, xmin:xmax]
+        uniq, inv = np.unique(keys, axis=0, return_inverse=True)
+        centroids = np.zeros((len(uniq), 3), dtype=np.float32)
+        np.add.at(centroids, inv, pc)           # voxel별 좌표 합
+        counts = np.bincount(inv)               # voxel별 점 개수
+        centroids /= counts[:, None]            # 평균 = centroid
 
-            if patch.size == 0:
-                # [entropy, 3*hist_bins, meanV, meanS]
-                return np.zeros(1 + 3*hist_bins + 2, dtype=np.float32)
-
-            gray = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY)
-
-            hist_gray, _ = np.histogram(gray, bins=hist_bins, range=(0, 256))
-            p = hist_gray.astype(np.float32)
-            p_sum = p.sum()
-            if p_sum > 0:
-                p = p / p_sum
-                p_nonzero = p[p > 0]
-                entropy = -np.sum(p_nonzero * np.log2(p_nonzero))
-            else:
-                entropy = 0.0
-
-            hist_features = []
-            for c in range(3):  # B, G, R
-                channel = patch[:, :, c]
-                hist_c, _ = np.histogram(channel, bins=hist_bins, range=(0, 256))
-                # normalize
-                if hist_c.sum() > 0:
-                    hist_c = hist_c.astype(np.float32) / hist_c.sum()
-                hist_features.append(hist_c)
-            hist_features = np.concatenate(hist_features, axis=0)  # shape (3*hist_bins,)
-
-            hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).astype(np.float32)
-            # OpenCV HSV: H[0-179], S[0-255], V[0-255]
-            S = hsv[:, :, 1] / 255.0
-            V = hsv[:, :, 2] / 255.0
-            mean_s = float(np.mean(S))
-            mean_v = float(np.mean(V))
-
-            feat = np.hstack([
-                np.array([entropy], dtype=np.float32),
-                hist_features.astype(np.float32),
-                np.array([mean_v, mean_s], dtype=np.float32)
-            ])
-
-            feat_list.append(feat)
-
-        img_stat = np.mean(np.stack(feat_list, axis=0), axis=0).astype(np.float32)
-        self.nodes[node_id]["img_stat"] = img_stat
-
-
+        return centroids
+        
     def node_sim(self, id1, id2):
-        sim = 0
-
-        pc1 = self.nodes[id1]["pc"]
-        pc2 = self.nodes[id2]["pc"]
-        
-        sim += self.nnratio(pc1, pc2)
-
-        # another similarity metric sholud be added
-        return sim
+        if not self._pair_valid(id1, id2):
+            return 0.0
+        return self.nnratio(self.nodes[id1]["pc"], self.nodes[id2]["pc"])
 
     def update_node_features(self):
         for node_id in list(self.nodes.keys()):
@@ -245,14 +215,25 @@ class SceneGraphMerger:
         ids = list(self.nodes.keys())
         for i, id_i in enumerate(ids):
             for id_j in ids[i+1:]:
-                score = self.node_sim(id_i, id_j)
-                sim[(id_i, id_j)] = score
-                sim[(id_j, id_i)] = score
+                if not self._pair_valid(id_i, id_j):
+                    continue
+                sim[(id_i, id_j)] = self.node_sim(id_i, id_j)
+                sim[(id_j, id_i)] = sim[(id_i, id_j)]
         return sim
 
     def merge_pair(self, ui, uj, sim_score = 0.0):
+        if self._is_static(ui) or self._is_static(uj):
+            return
+
         self.nodes[ui]["sim"] = sim_score
-        self.nodes[ui]["pc"] = np.vstack([self.nodes[ui]["pc"], self.nodes[uj]["pc"]])
+        
+        pc_u = self.nodes[ui]["pc"]
+        pc_v = self.nodes[uj]["pc"]
+        
+        merged_pc = np.vstack([pc_u, pc_v]) if pc_u.size and pc_v.size else (pc_u if pc_v.size == 0 else pc_v)
+        merged_pc = self.voxel_downsample(merged_pc, self.voxel_size)
+
+        self.nodes[ui]["pc"] = merged_pc
         # update edges
         new_edges = []
         for e in self.edges:
@@ -364,3 +345,65 @@ if __name__ == "__main__":
 #     mask = cnt_d > 0
 #     avg[mask] = sum_d[mask] / cnt_d[mask]
 #     return avg
+
+    # def extract_statistics_patch(self, node_id,
+    #                          hist_bins: int = 8) -> np.ndarray:
+        
+    #     orig, idx = node_id.rsplit('_', 1)
+    #     idx = int(idx)
+    #     dp = self.idp_pair.get(idx)
+
+    #     if dp is None:
+    #         self.nodes[node_id]["img_stat"] = np.zeros(1 + 3*hist_bins + 2, dtype=np.float32)
+    #         return
+        
+    #     bbox = self.nodes[node_id]["bbox"]
+
+    #     feat_list = []
+    #     for img in dp["image"]:
+    #         xmin, ymin, xmax, ymax = map(int, bbox)
+    #         patch = img[ymin:ymax, xmin:xmax]
+
+    #         if patch.size == 0:
+    #             # [entropy, 3*hist_bins, meanV, meanS]
+    #             return np.zeros(1 + 3*hist_bins + 2, dtype=np.float32)
+
+    #         gray = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY)
+
+    #         hist_gray, _ = np.histogram(gray, bins=hist_bins, range=(0, 256))
+    #         p = hist_gray.astype(np.float32)
+    #         p_sum = p.sum()
+    #         if p_sum > 0:
+    #             p = p / p_sum
+    #             p_nonzero = p[p > 0]
+    #             entropy = -np.sum(p_nonzero * np.log2(p_nonzero))
+    #         else:
+    #             entropy = 0.0
+
+    #         hist_features = []
+    #         for c in range(3):  # B, G, R
+    #             channel = patch[:, :, c]
+    #             hist_c, _ = np.histogram(channel, bins=hist_bins, range=(0, 256))
+    #             # normalize
+    #             if hist_c.sum() > 0:
+    #                 hist_c = hist_c.astype(np.float32) / hist_c.sum()
+    #             hist_features.append(hist_c)
+    #         hist_features = np.concatenate(hist_features, axis=0)  # shape (3*hist_bins,)
+
+    #         hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).astype(np.float32)
+    #         # OpenCV HSV: H[0-179], S[0-255], V[0-255]
+    #         S = hsv[:, :, 1] / 255.0
+    #         V = hsv[:, :, 2] / 255.0
+    #         mean_s = float(np.mean(S))
+    #         mean_v = float(np.mean(V))
+
+    #         feat = np.hstack([
+    #             np.array([entropy], dtype=np.float32),
+    #             hist_features.astype(np.float32),
+    #             np.array([mean_v, mean_s], dtype=np.float32)
+    #         ])
+
+    #         feat_list.append(feat)
+
+    #     img_stat = np.mean(np.stack(feat_list, axis=0), axis=0).astype(np.float32)
+    #     self.nodes[node_id]["img_stat"] = img_stat
