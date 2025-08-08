@@ -73,7 +73,7 @@ class SceneGraphMerger:
             idp["image"].append(img)
             idp["depth"].append(depth)
             idp["pose"].append(pose)
-        self.idp_pair[node_idx] = dp
+        self.idp_pair[node_idx] = idp
 
     def extract_pointcloud_from_bbox(self, depth, pose, bbox, camera_offset_z=0.0):
         xmin, ymin, xmax, ymax = map(int, bbox)
@@ -115,7 +115,7 @@ class SceneGraphMerger:
         #idx = node_id[-1]
         
         idx = int(idx)
-        dp = self.dp_pair.get(idx)
+        dp = self.idp_pair.get(idx)
         if dp is None:
             self.nodes[node_id]["pc"] = np.empty((0, 3), dtype=np.float32)
             return
@@ -148,7 +148,7 @@ class SceneGraphMerger:
         
         orig, idx = node_id.rsplit('_', 1)
         idx = int(idx)
-        dp = self.dp_pair.get(idx)
+        dp = self.idp_pair.get(idx)
 
         if dp is None:
             self.nodes[node_id]["img_stat"] = np.zeros(1 + 3*hist_bins + 2, dtype=np.float32)
