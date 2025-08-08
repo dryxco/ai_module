@@ -66,12 +66,15 @@ class SceneGraphMerger:
             return None
         if len(depth_dirs) != len(pose_paths):
             print(f"[Warning] Depth/pose count mismatch for node {node_idx}")
-        idp = {"image":[], "depth": [], "pose": []}
+        idp = {"id":[], "image":[], "depth": [], "pose": []}
         for i_path, d_path, p_path in zip(img_dirs, depth_dirs, pose_paths):
             img = cv2.imread(i_path, cv2.IMREAD_UNCHANGED).astype(np.float32)
             depth = cv2.imread(d_path, cv2.IMREAD_UNCHANGED).astype(np.float32)
             with open(p_path, 'r') as f:
                 pose = json.load(f)
+            
+            frame_id = Path(i_path).stem
+            idp["id"].append(str(frame_id))
             idp["image"].append(img)
             idp["depth"].append(depth)
             idp["pose"].append(pose)
@@ -146,8 +149,8 @@ class SceneGraphMerger:
             self.nodes[node_id]["pc"] = np.empty((0, 3), dtype=np.float32)
             return
         pcs = []
-        for depth, pose in zip(dp["depth"], dp["pose"]):
-            pc = self.extract_pointcloud_from_bbox(depth, pose, self.nodes[node_id]["bbox"])
+        for _id, depth, pose in zip(dp["id"], dp["depth"], dp["pose"]):
+            pc = self.extract_pointcloud_from_bbox(depth, pose, self.nodes[node_id]["bboxes"][_id])
             if pc.size:
                 pcs.append(pc)
         if not pcs:

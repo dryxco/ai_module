@@ -33,41 +33,50 @@ def match_node(label, bbox):
     for idx, n in enumerate(global_nodes):
         if n["label"] != label:
             continue
-        dist = ctr_dist_cyclic(n["bbox"], bbox)
+        # 여러 프레임의 bbox들 중 최소 거리로 비교
+        stored = n.get("bboxes", {})
+        if stored:
+            dist = min(ctr_dist_cyclic(bb, bbox) for bb in stored.values())
+        else:
+            # fallback: union bbox가 있으면 그걸로
+            dist = ctr_dist_cyclic(n.get("bbox", bbox), bbox)
         if dist <= CTR_T and dist < best_dist:
             best_dist, best_idx = dist, idx
     return best_idx
 
-def upsert_node(label, bbox):
-    mi = match_node(label, bbox)
+def upsert_node(label, bbox, frame_id):
     b = [float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])]
-    
+    mi = match_node(label, b)
+
     if mi is not None:
         node = global_nodes[mi]
         if label not in STATIC_LABELS:
-        #     node["_sum"] += np.array(bbox)
-        #     node["_cnt"] += 1
-        #     node["bbox"]  = (node["_sum"] / node["_cnt"]).tolist()
-            nb = node["bbox"]
-            node["bbox"] = [
-                    min(nb[0], b[0]),  # x1
-                    min(nb[1], b[1]),  # y1
-                    max(nb[2], b[2]),  # x2
-                    max(nb[3], b[3])   # y2
-            ]
+            # per-image bbox 기록
+            if "bboxes" not in node:
+                node["bboxes"] = {}
+            node["bboxes"][frame_id] = b
+            # union bbox 갱신 (x1,y1=min / x2,y2=max)
+            nb = node.get("bbox", b)
+            node["bbox"] = [min(nb[0], b[0]), min(nb[1], b[1]),
+                            max(nb[2], b[2]), max(nb[3], b[3])]
         return node["id"]
 
+    # 새 노드 생성
     label_cnt[label] += 1
     nid = f"{label}{label_cnt[label]}"
-    node = {"id": nid, "label": label,
-            "bbox": bbox, "_sum": np.array(bbox), "_cnt": 1}
+    node = {
+        "id": nid,
+        "label": label,
+        "bbox": b,                 # 현재 프레임 bbox로 초기화
+        "bboxes": {frame_id: b}    # per-image bbox dict
+    }
     id2idx[nid] = len(global_nodes)
     global_nodes.append(node)
     return nid
 
-def merge_one_triplet(trip):
-    sid = upsert_node(trip["subject"], trip["subject_box"])
-    oid = upsert_node(trip["object"],  trip["object_box"])
+def merge_one_triplet(trip, frame_id):
+    sid = upsert_node(trip["subject"], trip["subject_box"], frame_id)
+    oid = upsert_node(trip["object"],  trip["object_box"],  frame_id)
     global_edges.append({
         "subject": sid,
         "object":  oid,
@@ -75,39 +84,34 @@ def merge_one_triplet(trip):
         "confidence": trip.get("confidence", 1.0)
     })
 
-def merge_folder(json_dir=JSON_DIR, out_json=OUT_JSON, out_png = OUT_PNG):
+def merge_folder(json_dir=JSON_DIR, out_json=OUT_JSON, out_png=OUT_PNG):
     global global_nodes, global_edges, label_cnt, id2idx
-    # reinitialize
+    # 완전 초기화
     global_nodes, global_edges = [], []
     label_cnt = Counter()
-    id2idx = {}
-    label_cnt.clear()
-    id2idx.clear()
+    id2idx    = {}
 
     for fp in sorted(glob.glob(os.path.join(json_dir, "sg*.json"))):
+        # 파일명에서 frame_id 추출: sg_0000.json -> "0000"
+        stem = Path(fp).stem            # "sg_0000"
+        parts = stem.split("_", 1)
+        frame_id = parts[1] if len(parts) > 1 else stem
+
         with open(fp, encoding="utf-8") as f:
             cur = json.load(f)
         for t in cur:
-            merge_one_triplet(t)
+            merge_one_triplet(t, frame_id)
 
-    connected = {e["subject"] for e in global_edges} | \
-                {e["object"]  for e in global_edges}
+    # 연결된 노드만 남기기
+    connected = {e["subject"] for e in global_edges} | {e["object"] for e in global_edges}
     pruned_nodes = [n for n in global_nodes if n["id"] in connected]
-    for n in pruned_nodes:
-        n.pop("_sum", None); n.pop("_cnt", None)
 
     merged = {"nodes": pruned_nodes, "edges": global_edges}
+    Path(out_json).parent.mkdir(parents=True, exist_ok=True)
+    Path(out_json).write_text(json.dumps(merged, indent=2))
+    print(f"merged graph → {out_json} | nodes:{len(pruned_nodes)} edges:{len(global_edges)}")
 
-    out_dir = os.path.dirname(out_json)
-    os.makedirs(out_dir, exist_ok=True)
-    with open(out_json, "w") as f:
-        json.dump(merged, f, indent=2)
-    
-    #Path(OUT_JSON).write_text(json.dumps(merged, indent=2))
-    print(f"✅ merged graph → {out_json} | "
-          f"nodes:{len(pruned_nodes)} edges:{len(global_edges)}")
-
-    visualize(merged, out_png = out_png)
+    visualize(merged) 
 
 def visualize(g, out_png = OUT_PNG):
     try:
