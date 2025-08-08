@@ -1,0 +1,224 @@
+{
+  "nodes": [
+    {
+      "id": "plant1",
+      "label": "plant",
+      "bbox": [
+        1599.6667175292969,
+        183.17757034301758,
+        1785.803466796875,
+        447.1746139526367
+      ]
+    },
+    {
+      "id": "vase1",
+      "label": "vase",
+      "bbox": [
+        1641.7500915527344,
+        432.48006439208984,
+        1736.6978149414062,
+        480.3987579345703
+      ]
+    },
+    {
+      "id": "vase2",
+      "label": "vase",
+      "bbox": [
+        256.53055572509766,
+        347.84912109375,
+        326.93856048583984,
+        412.0358581542969
+      ]
+    },
+    {
+      "id": "table1",
+      "label": "table",
+      "bbox": [
+        205.2276851109096,
+        394.85743495396207,
+        454.37562779017856,
+        466.1250479561942
+      ]
+    },
+    {
+      "id": "room1",
+      "label": "room",
+      "bbox": [
+        1.9370841979980469,
+        -0.9925079345703125,
+        1921.1048583984375,
+        637.896240234375
+      ]
+    },
+    {
+      "id": "flower1",
+      "label": "flower",
+      "bbox": [
+        808.0551147460938,
+        320.69207763671875,
+        890.9266357421875,
+        378.46435546875
+      ]
+    },
+    {
+      "id": "vase3",
+      "label": "vase",
+      "bbox": [
+        803.1275939941406,
+        348.490966796875,
+        859.3193969726562,
+        420.8620300292969
+      ]
+    },
+    {
+      "id": "window1",
+      "label": "window",
+      "bbox": [
+        392.2701924641927,
+        221.18218994140625,
+        606.4794108072916,
+        394.91478474934894
+      ]
+    },
+    {
+      "id": "flower2",
+      "label": "flower",
+      "bbox": [
+        497.1827392578125,
+        310.9324951171875,
+        599.6985473632812,
+        368.1258544921875
+      ]
+    },
+    {
+      "id": "building1",
+      "label": "building",
+      "bbox": [
+        2.2412681579589844,
+        -0.7462120056152344,
+        1920.861572265625,
+        638.15576171875
+      ]
+    },
+    {
+      "id": "window2",
+      "label": "window",
+      "bbox": [
+        1638.3236694335938,
+        176.86721801757812,
+        1875.4266967773438,
+        456.7005157470703
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "subject": "plant1",
+      "object": "vase1",
+      "predicate": "in",
+      "confidence": 0.23941926658153534
+    },
+    {
+      "subject": "vase2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.0563325397670269
+    },
+    {
+      "subject": "table1",
+      "object": "room1",
+      "predicate": "in",
+      "confidence": 0.045491959899663925
+    },
+    {
+      "subject": "plant1",
+      "object": "vase1",
+      "predicate": "in",
+      "confidence": 0.17225268483161926
+    },
+    {
+      "subject": "flower1",
+      "object": "vase3",
+      "predicate": "in",
+      "confidence": 0.1572880744934082
+    },
+    {
+      "subject": "window1",
+      "object": "room1",
+      "predicate": "in",
+      "confidence": 0.03534543141722679
+    },
+    {
+      "subject": "plant1",
+      "object": "vase1",
+      "predicate": "in",
+      "confidence": 0.20068274438381195
+    },
+    {
+      "subject": "vase2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.09207779169082642
+    },
+    {
+      "subject": "flower2",
+      "object": "vase3",
+      "predicate": "in",
+      "confidence": 0.08273328095674515
+    },
+    {
+      "subject": "window1",
+      "object": "building1",
+      "predicate": "in",
+      "confidence": 0.07284809648990631
+    },
+    {
+      "subject": "vase2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.0647568479180336
+    },
+    {
+      "subject": "table1",
+      "object": "room1",
+      "predicate": "in",
+      "confidence": 0.06156785041093826
+    },
+    {
+      "subject": "window2",
+      "object": "building1",
+      "predicate": "in",
+      "confidence": 0.33203715085983276
+    },
+    {
+      "subject": "window2",
+      "object": "building1",
+      "predicate": "in",
+      "confidence": 0.2596161961555481
+    },
+    {
+      "subject": "plant1",
+      "object": "vase1",
+      "predicate": "in",
+      "confidence": 0.17323438823223114
+    },
+    {
+      "subject": "window1",
+      "object": "building1",
+      "predicate": "in",
+      "confidence": 0.12134770303964615
+    },
+    {
+      "subject": "vase2",
+      "object": "table1",
+      "predicate": "on",
+      "confidence": 0.07174770534038544
+    },
+    {
+      "subject": "table1",
+      "object": "room1",
+      "predicate": "in",
+      "confidence": 0.05379977077245712
+    }
+  ]
+}
