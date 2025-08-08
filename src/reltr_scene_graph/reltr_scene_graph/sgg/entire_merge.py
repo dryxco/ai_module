@@ -149,11 +149,17 @@ class SceneGraphMerger:
         if dp is None:
             self.nodes[node_id]["pc"] = np.empty((0, 3), dtype=np.float32)
             return
+        
         pcs = []
+        bboxes = self.nodes[node_id].get("bboxes", {})
         for _id, depth, pose in zip(dp["id"], dp["depth"], dp["pose"]):
-            pc = self.extract_pointcloud_from_bbox(depth, pose, self.nodes[node_id]["bboxes"][_id])
+            bbox = bboxes.get(_id)
+            if bbox is None:
+                continue
+            pc = self.extract_pointcloud_from_bbox(depth, pose, bbox)
             if pc.size:
                 pcs.append(pc)
+            
         if not pcs:
             self.nodes[node_id]["pc"] = np.empty((0, 3), dtype=np.float32)
             return
