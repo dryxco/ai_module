@@ -185,7 +185,7 @@ class SceneGraphMerger:
     def nnratio(self, pc1, pc2):
         r12 = self.nnratio_oneway(pc1, pc2)
         r21 = self.nnratio_oneway(pc2, pc1)
-        return np.mean([r12, r21])
+        return max(r12, r21)
     
     def voxel_downsample(self, pc: np.ndarray, voxel_size: float = None) -> np.ndarray:
         """(N,3) 포인트클라우드를 voxel 격자(크기 m)로 다운샘플링해서
