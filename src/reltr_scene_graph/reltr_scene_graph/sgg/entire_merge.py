@@ -76,15 +76,15 @@ class SceneGraphMerger:
         self.idp_pair[node_idx] = idp
 
     def extract_pointcloud_from_bbox(self, depth, pose, bbox, camera_offset_z=0.0):
-        image_width, image_height = depth.shape[1], depth.shape[0]
+        image_width, image_width = depth.shape[1], depth.shape[0]
 
         x0 = int(np.floor(bbox[0])); y0 = int(np.floor(bbox[1]))
         x1 = int(np.ceil (bbox[2])); y1 = int(np.ceil (bbox[3]))
         
-        x0 = max(0, min(x0, W-1))
-        x1 = max(0, min(x1, W))
-        y0 = max(0, min(y0, H-1))
-        y1 = max(0, min(y1, H))
+        x0 = max(0, min(x0, image_width-1))
+        x1 = max(0, min(x1, image_width))
+        y0 = max(0, min(y0, image_width-1))
+        y1 = max(0, min(y1, image_width))
         
         if x1 <= x0 or y1 <= y0:
             rospy.logwarn("Empty/invalid bbox after clipping")
