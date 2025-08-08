@@ -270,7 +270,7 @@ class SceneGraphMerger:
             print(f"{(ui, uj)} merged, it similarity {sim[(ui, uj)]}")
             sim = self.compute_all_sim()
     
-    def _json_default(o):
+    def _json_default(self, o):
         import numpy as np
         if isinstance(o, np.ndarray):
             return o.tolist()
@@ -295,7 +295,7 @@ class SceneGraphMerger:
             pc = node.get("pc")
             if isinstance(pc, np.ndarray) and pc.shape[0] > 0:
                 idx = np.random.choice(pc.shape[0], 10, replace=False)
-                pc_selected = pc[idx]
+                pc_selected = pc[idx].tolist()
 
             new_nodes.append({
                 "id": new_id,
@@ -319,7 +319,7 @@ class SceneGraphMerger:
         out_dir = os.path.dirname(self.out_json)
         os.makedirs(out_dir, exist_ok=True)
         with open(self.out_json, 'w') as f:
-            json.dump(final, f, indent=2, default = _json_default)
+            json.dump(final, f, indent=2, default = self._json_default)
 
 if __name__ == "__main__":
     merged_dir = "sgg/merged_sg"
