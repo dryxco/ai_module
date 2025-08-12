@@ -75,7 +75,6 @@ class GridNodePublisher:
 
         points -= self.origin
         grid_indices = np.floor(points[:, :2] / self.grid_size).astype(int)
-        a_star_node_indices = np.floor(points[:, :2] / self.a_star_node_size).astype(int)
 
         unique_grids = {}
         for idx, grid_idx in enumerate(grid_indices):
@@ -116,8 +115,9 @@ class GridNodePublisher:
         # 중복 방지 용 set을 다시 list로 바꾸고 오름차순 정렬함
         edge_list = [sorted(edge) for edge in edge_list]
         edge_list = sorted(edge_list, key=lambda x: (x[0], x[1]))
-        flat_list = [i for edge in edge_list for i in edge] 
+        flat_list = [i for edge in edge_list for i in edge]
 
+        a_star_node_indices = np.floor(points[:, :2] / self.a_star_node_size).astype(int)
         unique_a_star_nodes = {}
         for idx, grid_idx in enumerate(a_star_node_indices):
             key = tuple(grid_idx)
@@ -129,8 +129,10 @@ class GridNodePublisher:
         for pts in unique_a_star_nodes.values():
             if len(pts) >= self.min_points_per_grid:
                 mean_xyz = np.mean(np.array(pts), axis=0)
-                a_star_node_points.append(mean_xyz + self.origin)
-
+                close_pts = [pt for pt in pts if np.linalg.norm(pt - mean_xyz) < 0.3]
+                if len(close_pts) > 0 :
+                    a_star_node_points.append(mean_xyz + self.origin)
+        
         if len(node_points) == 0 or len(a_star_node_points) == 0:
             rospy.logwarn("No valid node points found.")
             return
