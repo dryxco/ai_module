@@ -11,7 +11,7 @@ import hashlib
 class GridNodePublisher:
     def __init__(self):
         rospy.init_node('grid_node_publisher')
-        self.grid_size = rospy.get_param("~grid_size", 2.0)  # in meters
+        self.grid_size = rospy.get_param("~grid_size", 5.0)  # in meters
         self.a_star_node_size = rospy.get_param("~a_star_node_size", 0.5) 
         self.min_points_per_grid = rospy.get_param("~min_points", 100)
 
