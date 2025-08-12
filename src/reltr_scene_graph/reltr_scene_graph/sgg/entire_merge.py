@@ -22,6 +22,7 @@ STATIC_LABELS   = {"room", "building"}
 class SceneGraphMerger:
     def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.2):
         self.static_labels = {"room", } #"building"
+        self.STATIC_NEI = {"building", "room", "window"}
         self.merged_dir = merged_dir
         self.data_root = data_root
         self.out_json = out_json
@@ -30,6 +31,7 @@ class SceneGraphMerger:
         self.cluster_eps = 1.5 * self.nn_radius     # DBSCAN 반경 (m) ~= 1~2*nn_radius
         self.cluster_min_samples = 15 #getattr(self, "cluster_min_samples", 20)
         self.cluster_max_points = 10000 #getattr(self, "cluster_max_points", 10000)
+        self.vocab = None
 
         self.nodes = {}
         self.edges = []
@@ -336,7 +338,30 @@ class SceneGraphMerger:
         for i, node_id in enumerate(node_order):
             self.nodes[node_id]["relation"] = X[i,:].toarray().reshape(len(vocab), 1)
         
-        #return node_order, vocab
+        return vocab
+
+    def relation_cosine(self, u_vec, v_vec, vocab, remove_static=True):
+        if u_vec is None or v_vec is None: 
+            return 0.0
+        sim_all = float(u_vec.T @ v_vec)
+
+        if not remove_static: 
+            return sim_all
+        
+        mask = np.ones((len(vocab), 1), dtype=np.float32)
+        for tok, j in vocab.items():
+            parts = tok.split(":")
+            if len(parts) >= 3:
+                nei = parts[-1]
+                if any(nei.startswith(s) for s in self.STATIC_NEI):
+                    mask[j, 0] = 0.0
+
+        u = u_vec * mask
+        v = v_vec * mask
+        nu = np.linalg.norm(u); nv = np.linalg.norm(v)
+        if nu == 0 or nv == 0: 
+            return 0.0
+        return float((u.T @ v) / (nu * nv))
 
     def node_sim(self, id1, id2):
         if not self._pair_valid(id1, id2):
@@ -347,15 +372,15 @@ class SceneGraphMerger:
         if rel_vec1 is None or rel_vec2 is None:
             relation_sim = 0.0
         else:
-            relation_sim = float(rel_vec1.T @ rel_vec2)
-        sim = 0.5 * pc_sim + 0.5 * relation_sim
+            relation_sim = self.relation_cosine(rel_vec1, rel_vec2, self.vocab)
+        sim = 0.4 * pc_sim + 0.6 * relation_sim
         return sim
 
     def update_node_features(self):
         for node_id in list(self.nodes.keys()):
             self.extract_pc(node_id)
             # should add another method to update other features
-        self.build_boc_tfidf()
+        self.vocab = self.build_boc_tfidf()
         print("updated node features")
 
     def compute_all_sim(self):
@@ -421,7 +446,7 @@ class SceneGraphMerger:
             (ui, uj), _ = max(candidates, key=lambda x: x[1])
             self.merge_pair(ui, uj, sim[(ui, uj)])
             self.update_node_features()
-            print(f"{(ui, uj)} merged, it similarity {sim[(ui, uj)]}")
+            print(f"{(ui, uj)} merged, similarity {sim[(ui, uj)]}")
             sim = self.compute_all_sim()
     
     def _json_default(self, o):
