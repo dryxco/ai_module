@@ -7,26 +7,28 @@ import glob
 import json
 import math
 from pathlib import Path
-from collections import Counter
+from collections import Counter, defaultdict
 import numpy as np
 import cv2
 import tf
+from typing import List, Dict, Tuple, Any, Optional
 from sklearn.neighbors import NearestNeighbors
 from sklearn.cluster import DBSCAN
 from scipy.spatial import cKDTree
+import scipy.sparse as sp
 
 STATIC_LABELS   = {"room", "building"}
 
 class SceneGraphMerger:
-    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.4):
-        self.static_labels = {"room", "building"}
+    def __init__(self, merged_dir, data_root, out_json, voxel_size=0.05, nn_radius=0.2):
+        self.static_labels = {"room", } #"building"
         self.merged_dir = merged_dir
         self.data_root = data_root
         self.out_json = out_json
         self.voxel_size = voxel_size
         self.nn_radius = nn_radius
         self.cluster_eps = 1.5 * self.nn_radius     # DBSCAN 반경 (m) ~= 1~2*nn_radius
-        self.cluster_min_samples = 3 #getattr(self, "cluster_min_samples", 20)
+        self.cluster_min_samples = 15 #getattr(self, "cluster_min_samples", 20)
         self.cluster_max_points = 10000 #getattr(self, "cluster_max_points", 10000)
 
         self.nodes = {}
@@ -223,6 +225,7 @@ class SceneGraphMerger:
                 r12 = self._nnratio_oneway_aligned(A,B)
                 r21 = self._nnratio_oneway_aligned(B,A)
                 best = max(best, r12, r21)
+                # 혹은 mean? 아니면 median? 
         return float(best)
     
     def voxel_downsample(self, pc: np.ndarray, voxel_size: float = None) -> np.ndarray:
@@ -248,16 +251,112 @@ class SceneGraphMerger:
         centroids /= counts[:, None]            # 평균 = centroid
 
         return centroids
+    
+    def build_boc_tfidf(self, 
+        edges: List[Dict[str, Any]],
+        *,
+        min_df: int = 1,               # 몇 개 이상의 노드에서 등장하는 토큰만 사용
+        use_confidence: bool = True,   # confidence를 TF 가중치로 사용할지
+        sublinear_tf: bool = True,     # TF -> 1+log(TF)
+        l2_normalize: bool = True,     # 최종 행벡터 L2 정규화
+        max_features: Optional[int] = None  # 상위 DF/TF-idf 기준으로 자를 때 사용 가능
+    ) -> Tuple[sp.csr_matrix, List[str], Dict[str, int]]:
+
+        static_labels = ["room", "building", ] #"table"
+        def _static_label(_id):
+            label = self.nodes[_id].get("label")
+            if label in static_labels:
+                return label
+            else :
+                return _id
         
+        def _add_token(bag: Dict[str, float], token: str, w: float):
+            bag[token] = bag.get(token, 0.0) + float(w)
+
+        nodes = set()
+        node_bags: Dict[str, Dict[str, float]] = defaultdict(dict)
+
+        for e in self.edges:
+            s = e["subject"]; o = e["object"]; p = e["predicate"]
+            c = float(e.get("confidence", 1.0))
+            w = c if use_confidence else 1.0
+
+            nodes.add(s); nodes.add(o)
+
+            # merging subject as table, vase, ..
+            tok_out = f"out:{p}:{_static_label(o)}"
+            self._add_token(node_bags[s], tok_out, w)
+
+            # merging subject as table, vase, ..
+            tok_in = f"in:{p}:{_static_label(s)}"
+            self._add_token(node_bags[o], tok_in, w)
+
+        node_order = sorted(nodes)
+        N = len(node_order)
+
+        df_counter = Counter()
+        for u in node_order:
+            for t in node_bags[u].keys():
+                df_counter[t] += 1
+        
+        tokens = [t for t, df in df_counter.items() if df >= min_df]
+        
+        if max_features is not None and len(tokens) > max_features:
+            # -df_counter[t] to order tokens as descend order, t to order as alphabatical order 
+            tokens = sorted(tokens, key=lambda t: (-df_counter[t], t))[:max_features]
+        
+        vocab = {t: i for i, t in enumerate(sorted(tokens))}
+        rows, cols, data = [], [], []
+
+        idf = np.zeros(len(vocab), dtype=np.float32)
+        for t, j in vocab.items():
+            df = df_counter[t]
+            idf[j] = np.log((N + 1) / (df + 1)) + 1.0  # smoothed IDF
+
+        for i, u in enumerate(node_order):
+            bag = node_bags[u]
+            if not bag:
+                continue
+            
+            for t, tf in bag.items():
+                j = vocab.get(t)
+                if j is None:
+                    continue
+                val = tf
+                if sublinear_tf:
+                    val = 1.0 + np.log(max(val, 1e-12))
+                rows.append(i); cols.append(j); data.append(val * idf[j])
+
+        X = sp.csr_matrix((data, (rows, cols)), shape=(N, len(vocab)), dtype=np.float32)
+
+        if l2_normalize and X.nnz > 0:
+            norms = np.sqrt(X.multiply(X).sum(axis=1)).A1
+            nz = norms > 0
+            X[nz] = sp.diags(1.0 / norms[nz]) @ X[nz]
+
+        for i, node_id in enumerate(node_order):
+            self.nodes[node_id]["relation"] = X[i,:].toarray().reshape(len(vocab), 1)
+        
+        #return node_order, vocab
+
     def node_sim(self, id1, id2):
         if not self._pair_valid(id1, id2):
             return 0.0
-        return self.nnratio(self.nodes[id1]["pc"], self.nodes[id2]["pc"])
+        pc_sim = self.nnratio(self.nodes[id1]["pc"], self.nodes[id2]["pc"])
+        rel_vec1 = self.nodes[id1].get("relation")
+        rel_vec2 = self.nodes[id2].get("relation")
+        if rel_vec1 is None or rel_vec2 is None:
+            relation_sim = 0.0
+        else:
+            relation_sim = float(rel_vec1.T @ rel_vec2)
+        sim = 0.5 * pc_sim + 0.5 * relation_sim
+        return sim
 
     def update_node_features(self):
         for node_id in list(self.nodes.keys()):
             self.extract_pc(node_id)
             # should add another method to update other features
+        self.build_boc_tfidf()
 
     def compute_all_sim(self):
         sim = {}
@@ -297,8 +396,22 @@ class SceneGraphMerger:
         # remove node
         del self.nodes[uj]
 
-    def iterative_merge(self, threshold=0.9):
+    def iterative_merge(self, threshold=0.5):
         sim = self.compute_all_sim()
+        rooms_id = [id for id in self.nodes.keys() if self.nodes[id].get('label') == "room"]
+        target = sorted(rooms_id)[0]
+        while len(rooms_id) > 1 :
+            if target not in rooms_id:
+                if rooms_id:
+                    target = sorted(rooms_id)[0]
+                else:
+                    print("unexpected room merging finished")
+                    continue
+            candidates = sorted([nid for nid in rooms_id if nid != target])
+            other = candidates[0]
+            self.merge_pair(target, other, 1.0)
+            rooms_id = [id for id in self.nodes.keys() if self.nodes[id].get('label') == "room"]
+
         while True:
             candidates = [(pair, score) for pair, score in sim.items() if score >= threshold]
             if not candidates: break
@@ -378,93 +491,3 @@ if __name__ == "__main__":
     merger.save_graph()
 
     print(f"Scene graph saved to {out_json}")
-
-
-
-
-
-# def merge_depth_for_node(node_idx, depth_root, ext=".png"):
-#     depth_dir = os.path.join(depth_root, str(node_idx), "depth")
-#     paths = sorted(glob.glob(os.path.join(depth_dir, f"*{ext}")))
-#     if not paths:
-#         return None
-
-#     sum_d = None
-#     cnt_d = None
-#     for p in paths:
-#         d = cv2.imread(p, cv2.IMREAD_UNCHANGED).astype(np.float32)
-#         valid = (d > 0).astype(np.float32)
-#         if sum_d is None:
-#             sum_d = d * valid
-#             cnt_d = valid
-#         else:
-#             sum_d += d * valid
-#             cnt_d += valid
-
-#     # 평균 depth 계산. cnt_d는 누적한 횟수, sum_d는 누적 값에 해당
-#     avg = np.zeros_like(sum_d)
-#     mask = cnt_d > 0
-#     avg[mask] = sum_d[mask] / cnt_d[mask]
-#     return avg
-
-    # def extract_statistics_patch(self, node_id,
-    #                          hist_bins: int = 8) -> np.ndarray:
-        
-    #     orig, idx = node_id.rsplit('_', 1)
-    #     idx = int(idx)
-    #     dp = self.idp_pair.get(idx)
-
-    #     if dp is None:
-    #         self.nodes[node_id]["img_stat"] = np.zeros(1 + 3*hist_bins + 2, dtype=np.float32)
-    #         return
-        
-    #     bbox = self.nodes[node_id]["bbox"]
-
-    #     feat_list = []
-    #     for img in dp["image"]:
-    #         xmin, ymin, xmax, ymax = map(int, bbox)
-    #         patch = img[ymin:ymax, xmin:xmax]
-
-    #         if patch.size == 0:
-    #             # [entropy, 3*hist_bins, meanV, meanS]
-    #             return np.zeros(1 + 3*hist_bins + 2, dtype=np.float32)
-
-    #         gray = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY)
-
-    #         hist_gray, _ = np.histogram(gray, bins=hist_bins, range=(0, 256))
-    #         p = hist_gray.astype(np.float32)
-    #         p_sum = p.sum()
-    #         if p_sum > 0:
-    #             p = p / p_sum
-    #             p_nonzero = p[p > 0]
-    #             entropy = -np.sum(p_nonzero * np.log2(p_nonzero))
-    #         else:
-    #             entropy = 0.0
-
-    #         hist_features = []
-    #         for c in range(3):  # B, G, R
-    #             channel = patch[:, :, c]
-    #             hist_c, _ = np.histogram(channel, bins=hist_bins, range=(0, 256))
-    #             # normalize
-    #             if hist_c.sum() > 0:
-    #                 hist_c = hist_c.astype(np.float32) / hist_c.sum()
-    #             hist_features.append(hist_c)
-    #         hist_features = np.concatenate(hist_features, axis=0)  # shape (3*hist_bins,)
-
-    #         hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).astype(np.float32)
-    #         # OpenCV HSV: H[0-179], S[0-255], V[0-255]
-    #         S = hsv[:, :, 1] / 255.0
-    #         V = hsv[:, :, 2] / 255.0
-    #         mean_s = float(np.mean(S))
-    #         mean_v = float(np.mean(V))
-
-    #         feat = np.hstack([
-    #             np.array([entropy], dtype=np.float32),
-    #             hist_features.astype(np.float32),
-    #             np.array([mean_v, mean_s], dtype=np.float32)
-    #         ])
-
-    #         feat_list.append(feat)
-
-    #     img_stat = np.mean(np.stack(feat_list, axis=0), axis=0).astype(np.float32)
-    #     self.nodes[node_id]["img_stat"] = img_stat
