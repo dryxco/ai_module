@@ -195,7 +195,7 @@ class RelTRSGGNode:
                 print(f"{e}, error occurred in align data")
         
         all_merger.update_node_features()
-        all_merger.iterative_merge(threshold=0.001)
+        all_merger.iterative_merge(threshold=0.35)
         all_merger.save_graph()
 
         print(f"Scene graph saved to {out_json}")
