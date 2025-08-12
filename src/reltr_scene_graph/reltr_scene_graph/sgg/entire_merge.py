@@ -369,19 +369,19 @@ class SceneGraphMerger:
                 sim[(id_j, id_i)] = sim[(id_i, id_j)]
         return sim
 
-    def merge_pair(self, ui, uj, sim_score = 0.0):
-        if self._is_static(ui) or self._is_static(uj):
+    def merge_pair(self, ui, uj, sim_score = 0.0, allow_static = False):
+        if allow_static and (self._is_static(ui) or self._is_static(uj)):
             return
 
         self.nodes[ui]["sim"] = sim_score
         
-        pc_u = self.nodes[ui]["pc"]
-        pc_v = self.nodes[uj]["pc"]
+        # pc_u = self.nodes[ui]["pc"]
+        # pc_v = self.nodes[uj]["pc"]
         
-        merged_pc = np.vstack([pc_u, pc_v]) if pc_u.size and pc_v.size else (pc_u if pc_v.size == 0 else pc_v)
-        merged_pc = self.voxel_downsample(merged_pc, self.voxel_size)
-
+        # merged_pc = np.vstack([pc_u, pc_v]) if pc_u.size and pc_v.size else (pc_u if pc_v.size == 0 else pc_v)
+        # merged_pc = self.voxel_downsample(merged_pc, self.voxel_size)
         #self.nodes[ui]["pc"] = merged_pc
+
         # update edges
         new_edges = []
         for e in self.edges:
@@ -401,6 +401,7 @@ class SceneGraphMerger:
         rooms_id = [id for id in self.nodes.keys() if self.nodes[id].get('label') == "room"]
         target = sorted(rooms_id)[0]
         while len(rooms_id) > 1 :
+            rooms_id = [id for id in self.nodes.keys() if self.nodes[id].get('label') == "room"]
             if target not in rooms_id:
                 if rooms_id:
                     target = sorted(rooms_id)[0]
@@ -409,9 +410,9 @@ class SceneGraphMerger:
                     continue
             candidates = sorted([nid for nid in rooms_id if nid != target])
             other = candidates[0]
-            self.merge_pair(target, other, 1.0)
+            self.merge_pair(target, other, 1.0, True)
             print(f"room merged as {target} <- {other}")
-            rooms_id = [id for id in self.nodes.keys() if self.nodes[id].get('label') == "room"]
+
         print("room merged finshed")
 
         while True:
