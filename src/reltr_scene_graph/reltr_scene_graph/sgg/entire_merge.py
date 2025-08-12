@@ -401,7 +401,6 @@ class SceneGraphMerger:
         rooms_id = [id for id in self.nodes.keys() if self.nodes[id].get('label') == "room"]
         target = sorted(rooms_id)[0]
         while len(rooms_id) > 1 :
-            rooms_id = [id for id in self.nodes.keys() if self.nodes[id].get('label') == "room"]
             if target not in rooms_id:
                 if rooms_id:
                     target = sorted(rooms_id)[0]
@@ -411,6 +410,7 @@ class SceneGraphMerger:
             candidates = sorted([nid for nid in rooms_id if nid != target])
             other = candidates[0]
             self.merge_pair(target, other, 1.0, allow_static = False)
+            rooms_id = [id for id in self.nodes.keys() if self.nodes[id].get('label') == "room"]
             print(f"room merged as {target} <- {other}")
 
         print("room merged finshed")
