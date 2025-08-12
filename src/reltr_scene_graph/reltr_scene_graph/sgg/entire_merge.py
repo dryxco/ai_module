@@ -410,7 +410,7 @@ class SceneGraphMerger:
                     continue
             candidates = sorted([nid for nid in rooms_id if nid != target])
             other = candidates[0]
-            self.merge_pair(target, other, 1.0, True)
+            self.merge_pair(target, other, 1.0, allow_static = True)
             print(f"room merged as {target} <- {other}")
 
         print("room merged finshed")
