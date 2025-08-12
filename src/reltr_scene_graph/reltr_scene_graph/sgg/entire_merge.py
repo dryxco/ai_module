@@ -253,14 +253,13 @@ class SceneGraphMerger:
         return centroids
     
     def build_boc_tfidf(self, 
-        edges: List[Dict[str, Any]],
         *,
         min_df: int = 1,               # 몇 개 이상의 노드에서 등장하는 토큰만 사용
         use_confidence: bool = True,   # confidence를 TF 가중치로 사용할지
         sublinear_tf: bool = True,     # TF -> 1+log(TF)
         l2_normalize: bool = True,     # 최종 행벡터 L2 정규화
         max_features: Optional[int] = None  # 상위 DF/TF-idf 기준으로 자를 때 사용 가능
-    ) -> Tuple[sp.csr_matrix, List[str], Dict[str, int]]:
+    ) :
 
         static_labels = ["room", "building", ] #"table"
         def _static_label(_id):
