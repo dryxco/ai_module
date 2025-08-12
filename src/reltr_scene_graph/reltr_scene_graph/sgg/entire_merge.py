@@ -356,6 +356,7 @@ class SceneGraphMerger:
             self.extract_pc(node_id)
             # should add another method to update other features
         self.build_boc_tfidf()
+        print("updated node features")
 
     def compute_all_sim(self):
         sim = {}
@@ -409,7 +410,9 @@ class SceneGraphMerger:
             candidates = sorted([nid for nid in rooms_id if nid != target])
             other = candidates[0]
             self.merge_pair(target, other, 1.0)
+            print(f"room merged as {target} <- {other}")
             rooms_id = [id for id in self.nodes.keys() if self.nodes[id].get('label') == "room"]
+        print("room merged finshed")
 
         while True:
             candidates = [(pair, score) for pair, score in sim.items() if score >= threshold]
