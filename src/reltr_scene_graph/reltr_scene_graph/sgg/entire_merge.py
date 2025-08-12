@@ -369,7 +369,7 @@ class SceneGraphMerger:
                 sim[(id_j, id_i)] = sim[(id_i, id_j)]
         return sim
 
-    def merge_pair(self, ui, uj, sim_score = 0.0, allow_static = False):
+    def merge_pair(self, ui, uj, sim_score = 0.0, allow_static = True):
         if allow_static and (self._is_static(ui) or self._is_static(uj)):
             return
 
@@ -410,7 +410,7 @@ class SceneGraphMerger:
                     continue
             candidates = sorted([nid for nid in rooms_id if nid != target])
             other = candidates[0]
-            self.merge_pair(target, other, 1.0, allow_static = True)
+            self.merge_pair(target, other, 1.0, allow_static = False)
             print(f"room merged as {target} <- {other}")
 
         print("room merged finshed")
