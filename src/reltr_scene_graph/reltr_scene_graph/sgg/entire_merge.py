@@ -284,11 +284,11 @@ class SceneGraphMerger:
 
             # merging subject as table, vase, ..
             tok_out = f"out:{p}:{_static_label(o)}"
-            self._add_token(node_bags[s], tok_out, w)
+            _add_token(node_bags[s], tok_out, w)
 
             # merging subject as table, vase, ..
             tok_in = f"in:{p}:{_static_label(s)}"
-            self._add_token(node_bags[o], tok_in, w)
+            _add_token(node_bags[o], tok_in, w)
 
         node_order = sorted(nodes)
         N = len(node_order)
