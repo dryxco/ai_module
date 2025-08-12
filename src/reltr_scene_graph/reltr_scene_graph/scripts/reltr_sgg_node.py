@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os, json, sys
+import os, json, sys, shutil
 import rospy, rospkg
 from std_msgs.msg import String, Int32MultiArray
 from sensor_msgs.msg import Image, CompressedImage
@@ -132,6 +132,15 @@ class RelTRSGGNode:
     
     @torch.no_grad()
     def generate_all_scene_graphs(self):
+        # erase previous merged scene graphs    
+        for target_dir in [
+            os.path.join(self.sgg_route, "merged_sg"),
+            os.path.join(self.sgg_route, "sg_per_node")
+        ]:
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir)
+                os.makedirs(target_dir, exist_ok=True)
+        
         # to generate sg for every image in 1 node
         for idx in range(self.node_count):
             img_dirs = sorted(glob.glob(os.path.join(self.data_root, str(idx), "image", "*.png")))

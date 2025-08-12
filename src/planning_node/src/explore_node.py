@@ -15,7 +15,7 @@ import hashlib, struct
 from collections import defaultdict
 
 import subprocess, signal
-import os
+import os, shutil
 import json, cv2
 from cv_bridge import CvBridge
 
@@ -360,6 +360,13 @@ class ExplorationNode:
         #     rospy.loginfo("rosbag recording stopped.")
     
     def store_data(self):
+        # erase all previous data (image, depth, pose) to store new data
+        data_root = os.path.abspath(os.path.join(__file__, '..', '..', '..', '..', 'data'))
+        for name in os.listdir(data_root):
+            path = os.path.join(data_root, name)
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+        
         for node_idx, buf in self.buffer_dict.items():
             if buf is None or len(buf['image']) == 0:
                 rospy.loginfo(f"[Store] No data for node {node_idx}, skipping")
