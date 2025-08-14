@@ -1,0 +1,20 @@
+<launch>
+    <!-- Argument to select the operating mode -->
+    <!-- 1: Image-only, Integer -->
+    <!-- 2: Image-only, Integer + Explanation -->
+    <!-- 3: Image + Scene Graph, Integer -->
+    <!-- 4: Image + Scene Graph, Integer + Explanation -->
+    <arg name="mode" default="1" doc="Set the operating mode for the numerical answer generator."/>
+
+    <!-- Node for answering numerical questions -->
+    <node pkg="gemini_api" type="answer_numerical.py" name="answer_numerical_node" output="screen">
+        <param name="mode" value="$(arg mode)" />
+    </node>
+
+    <!-- 
+    You may need to launch the dummy VLM node that publishes the question.
+    As you correctly pointed out, the type is the name of the executable.
+    Example (uncomment and adapt if needed):
+    <node pkg="dummy_vlm" type="dummyVLM" name="dummyVLM" output="screen" required="true"/>
+    -->
+</launch>

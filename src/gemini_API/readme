@@ -1,0 +1,78 @@
+  Prerequisites
+
+   1. Set Google API Key: The script requires your Google API key. Open a
+       terminal and set it as an environment variable. You must do this 
+      in every new terminal you use for this process.
+
+   1     export GOOGLE_API_KEY="YOUR_API_KEY"
+      Replace "YOUR_API_KEY" with your actual key.
+
+   2. Source your Workspace: Before running any ROS commands, make sure
+      you have sourced your Catkin workspace setup file. Assuming your
+      workspace is named catkin_ws and is in your home directory:
+
+   1     source ~/catkin_ws/devel/setup.bash
+
+  Running the Script
+
+  You will need three separate terminals for this process.
+
+  ---
+
+  Terminal 1: Start ROS Master
+
+  First, you need to have a ROS master running.
+   1 roscore
+
+  ---
+
+  Terminal 2: Launch the Node (Choose a Mode)
+
+  This is where you will run the script using roslaunch and select one of
+   the four modes.
+
+   * Mode 1: Image-only, Integer Answer
+      This mode uses only the images to generate a single integer as the
+  answer.
+
+   1     roslaunch gemini_api gemini_api.launch mode:=1
+
+   * Mode 2: Image-only, Integer + Explanation
+      This mode uses only the images to generate an integer answer
+  followed by a brief explanation.
+
+   1     roslaunch gemini_api gemini_api.launch mode:=2
+
+   * Mode 3: Image + Scene Graph, Integer Answer
+      This mode uses both the images and the scene graph file to generate
+   a single integer as the answer.
+
+   1     roslaunch gemini_api gemini_api.launch mode:=3
+
+   * Mode 4: Image + Scene Graph, Integer + Explanation
+      This mode uses both the images and the scene graph to generate an
+  integer answer and an explanation.
+
+   1     roslaunch gemini_api gemini_api.launch mode:=4
+
+  After running one of these commands, the node will start and wait for a
+   question.
+
+  ---
+
+  Terminal 3: Publish a Question and View the Answer
+
+   1. Publish a Question: To trigger the node, publish your question to
+      the /vlm_question topic. For example:
+
+   1     rostopic pub /vlm_question std_msgs/String "How many 
+     red objects are in the images?"
+      You only need to press Enter once after this command.
+
+   2. View the Answer: The script will publish its response to the
+      /numerical_response topic. You can listen to this topic to see the
+      output from the Gemini API.
+
+   1     rostopic echo /numerical_response
+      The answer will appear here shortly after you publish the question.
+   You can leave this command running to see all future answers.

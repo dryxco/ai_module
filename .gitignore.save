@@ -1,0 +1,15 @@
+ai_module/build/
+ai_module/devel/
+/build/
+/devel/
+/data/*
+!data/
+/src/planning_node//src/planning_node/src/data/src/data/*
+!/src/reltr_scene_graph/vla_bringup/src/data/
+
+.vscode/
+*.pyc
+**/.vscode/**
+**/__pycache__/**
+*.pkl
+*.pth
