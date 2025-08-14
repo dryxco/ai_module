@@ -76,6 +76,7 @@ class RelTRSGGNode:
         rospy.loginfo(f"[reltr_sgg] Subscribed to {self.image_topic}")
         
         self.pub_json = rospy.Publisher("scene_graph/json", String, queue_size=10)
+        self.fin_pub = rospy.Publisher("/reltr_mode", String, queue_size = 1)
     
     def mode_callback(self, msg):
         if msg.data != "fin":
