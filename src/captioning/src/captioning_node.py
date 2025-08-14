@@ -70,7 +70,7 @@ def get_caption_for_crop(jpeg_bytes: bytes, client: genai.Client, model_name: st
 
 class CaptioningNode:
     def __init__(self):
-        rospy.init_node("reltr_captioning_node", anonymous=True)
+        rospy.init_node("captioning_node", anonymous=True)
         self.bridge = CvBridge()
 
         pkg_root = Path(rospkg.RosPack().get_path('reltr_scene_graph'))
@@ -87,7 +87,7 @@ class CaptioningNode:
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
         save_crops_dir = (self.save_dir / 'crops')
-        self.save_crops_dir: Path = Path().resolve()
+        self.save_crops_dir: Path = Path(save_crops_dir).resolve()
         if self.save_crops_dir:
             self.save_crops_dir.mkdir(parents=True, exist_ok=True)
         
@@ -100,6 +100,8 @@ class CaptioningNode:
 
         self.if_process = False
         rospy.Subscriber("/reltr_mode", String, self.mode_callback)
+        
+        self.fin_pub = rospy.Publisher("/caption_mode", String, queue_size = 1)
 
         rospy.loginfo(f"[CaptioningNode] data_root={self.data_root}")
         rospy.loginfo(f"[CaptioningNode] sgg_route={self.sgg_route}")
@@ -114,6 +116,10 @@ class CaptioningNode:
             self.if_process = True
             try:
                 self.extract_all_captions()
+                msg = String()
+                msg.data = "fin"
+                self.fin_pub.publish(msg)
+
             except Exception as e:
                 rospy.logerr(f"extract_all_captions failed: {e}")
             finally:
@@ -195,6 +201,7 @@ class CaptioningNode:
             node["caption"] = caption
 
             if self.save_crops_dir:
+                Path(str(self.save_crops_dir / f"{node_idx}")).mkdir(parents=True, exist_ok=True)
                 crop_path = self.save_crops_dir / f"{node_idx}" / f"crop_{i:04d}.jpg"
                 try:
                     cropped.save(str(crop_path), "JPEG", quality=90)
