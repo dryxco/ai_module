@@ -1,6 +1,6 @@
 <launch>
     <!-- captioning -->
-    <node pkg="captioning" type="captioning_node.py" name="captioning_node" output="screen" 
+    <node pkg="captioniong" type="captioning_node.py" name="captioning_node" output="screen" 
     launch-prefix="/home/yong/venvs/gemini310/bin/python">   <!-- please use different path of venv with python 3.10 or above -->
         <param name="use_sim_time" value="false"/>
     </node>

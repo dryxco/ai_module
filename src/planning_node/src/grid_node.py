@@ -88,9 +88,10 @@ class GridNodePublisher:
         for key, pts in unique_grids.items():
             if len(pts) >= self.min_points_per_grid:
                 mean_xyz = np.mean(np.array(pts), axis=0)
-                close_pts = [pt for pt in pts if np.linalg.norm(pt - mean_xyz) < 0.3]
-                if len(close_pts) > 0 :
-                    node_points.append(mean_xyz + self.origin)
+                close_pts = [pt for pt in pts if np.linalg.norm(pt - mean_xyz) < 0.5]
+                safe_mean_xyz = np.mean(np.array(close_pts), axis=0) if close_pts else mean_xyz
+                if len(close_pts) > len(pts) * 0.05:
+                    node_points.append(safe_mean_xyz + self.origin)
                     edge_grids[key] = pts
         
         # edge 를 unique_grids의 grid key에 대해서 생성

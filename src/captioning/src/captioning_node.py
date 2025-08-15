@@ -6,10 +6,7 @@ import io
 import json
 from typing import Dict, Any, List, Tuple
 from pathlib import Path
-
-import numpy as np
-np.int = int   # 안전하게 alias
-np.float = float
+import time
 
 from PIL import Image
 
@@ -19,8 +16,7 @@ import rospkg
 from std_msgs.msg import String
 from cv_bridge import CvBridge
 
-from google.genai import types
-from google import genai
+import google.generativeai as genai
 
 def get_json(json_path: str) -> Dict[str, Any]:
     with open(json_path, "r", encoding="utf-8") as f:
@@ -57,15 +53,49 @@ def pil_to_jpeg_bytes(pil_img: Image.Image, quality: int = 90) -> bytes:
     pil_img.save(buf, format="JPEG", quality=quality)
     return buf.getvalue()
 
-def get_caption_for_crop(jpeg_bytes: bytes, client: genai.Client, model_name: str) -> str:
-    resp = client.models.generate_content(
-        model=model_name,
-        contents=[
-            types.Part.from_bytes(data=jpeg_bytes, mime_type='image/jpeg'),
-            "Briefly describe this object in the image."
-        ]
-    )
-    return (resp.text or "").strip() if resp else ""
+def pil_to_bytes(img: Image.Image) -> bytes:
+    import io
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
+
+def get_caption_for_crop(pil_img: Image.Image, model) -> str:
+    parts = [
+        {
+            "mime_type": "image/jpeg",
+            "data": pil_to_bytes(pil_img),
+        },
+        "Describe the object in this image. Respond with one sentence in neutral tone."
+    ]
+
+    try:
+        resp = model.generate_content(parts)
+    except Exception as e:
+        rospy.logwarn(f"[Gemini] API call failed: {e}")
+        return ""
+
+    try:
+        candidates = getattr(resp, "candidates", [])
+        if not candidates:
+            rospy.logwarn("[Gemini] No candidates returned.")
+            return ""
+
+        c = candidates[0]
+        fr = getattr(c, "finish_reason", None)
+        sr = getattr(c, "safety_ratings", None)
+
+        content = getattr(c, "content", None)
+        if not content or not getattr(content, "parts", None):
+            rospy.logwarn(f"[Gemini] No text parts returned. finish_reason={fr}, safety={sr}")
+            return ""
+
+        answer = "\n".join(p.text for p in content.parts if hasattr(p, 'text')).strip()
+        if not answer:
+            rospy.logwarn(f"[Gemini] Empty caption after parsing. finish_reason={fr}, safety={sr}")
+        return answer
+    except Exception as e:
+        rospy.logwarn(f"[Gemini] Failed to parse response: {e}")
+        return ""
 
 
 class CaptioningNode:
@@ -96,12 +126,26 @@ class CaptioningNode:
         if not api_key:
             rospy.logfatal("GEMINI_API_KEY is not set.")
             raise RuntimeError("GEMINI_API_KEY is not set.")
-        self.client = genai.Client(api_key=api_key)
+        
+        genai.configure(api_key=api_key)
+
+        self.model = genai.GenerativeModel(
+            self.model_name,
+            generation_config={
+                "temperature": 0.2,
+                "max_output_tokens": 256,  # 필요시 조정
+            },
+            safety_settings=[
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ],
+        )
 
         self.if_process = False
-        rospy.Subscriber("/reltr_mode", String, self.mode_callback)
-        
-        self.fin_pub = rospy.Publisher("/caption_mode", String, queue_size = 1)
+        rospy.Subscriber("/caption_mode", String, self.mode_callback)
+
+        self.fin_pub = rospy.Publisher("/caption_fin", String, queue_size=1)
 
         rospy.loginfo(f"[CaptioningNode] data_root={self.data_root}")
         rospy.loginfo(f"[CaptioningNode] sgg_route={self.sgg_route}")
@@ -148,7 +192,8 @@ class CaptioningNode:
                 sg = get_json(str(json_path))
                 updated = self.crop_and_caption_one_node(node_idx, sg)
 
-                save_path = self.save_dir / f"merged_sg_{node_idx}_with_captions.json"
+                #save_path = self.save_dir / f"merged_sg_{node_idx}_with_captions.json"
+                save_path = self.sgg_route / "merged_sg" / f"merged_sg_{node_idx}.json"
                 with open(save_path, "w", encoding="utf-8") as f:
                     json.dump(updated, f, ensure_ascii=False, indent=2)
                 rospy.loginfo(f"[OK] Saved updated JSON -> {save_path}")
@@ -190,10 +235,11 @@ class CaptioningNode:
 
             img = load_image(str(image_path))
             cropped = crop_image(img, bbox)
-            jpeg_bytes = pil_to_jpeg_bytes(cropped, quality=90)
+            #jpeg_bytes = pil_to_jpeg_bytes(cropped, quality=90)
 
             try:
-                caption = get_caption_for_crop(jpeg_bytes, self.client, self.model_name)
+                caption = get_caption_for_crop(cropped, self.model)
+                print(f"[node {node_idx}] captioned node[{i}] ({image_path.name}): {caption}")
             except Exception as e:
                 rospy.logwarn(f"[node {node_idx}] captioning failed at node[{i}] ({image_path.name}): {e}")
                 caption = ""
@@ -207,6 +253,7 @@ class CaptioningNode:
                     cropped.save(str(crop_path), "JPEG", quality=90)
                 except Exception as e:
                     rospy.logwarn(f"failed to save crop: {crop_path} ({e})")
+            time.sleep(0.1)
         
         return sg
 

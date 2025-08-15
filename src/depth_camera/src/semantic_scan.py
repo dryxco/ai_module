@@ -96,7 +96,7 @@ def visualize_depth_overlay(rgb_image, depth_image):
     return overlay
 
 def process():
-    global image_id_pointer, new_laser_cloud
+    global image_id_pointer, new_laser_cloud, image_time
     if not image_init or not new_laser_cloud:
         #print("Skipping: image not ready or no new laser data")
         return

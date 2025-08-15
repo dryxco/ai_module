@@ -56,6 +56,7 @@ class SceneGraphMerger:
                     "bboxes" : n["bboxes"],
                     "pc": None,
                     "img_stat" : None,
+                    "caption" : n.get("caption", ""),
                 }
             for e in g["edges"]:
                 sid = f"{e['subject']}_{gi}"
@@ -399,7 +400,7 @@ class SceneGraphMerger:
             return
 
         self.nodes[ui]["sim"] = sim_score
-        
+        self.nodes[ui]["caption"] = self.nodes[ui].get("caption", "") + self.nodes[uj].get("caption", "")
         # pc_u = self.nodes[ui]["pc"]
         # pc_v = self.nodes[uj]["pc"]
         
@@ -479,7 +480,8 @@ class SceneGraphMerger:
             new_nodes.append({
                 "id": new_id,
                 "label": node["label"],
-                "pc" : pc_selected
+                "pc" : pc_selected,
+                "caption": node.get("caption", ""),
             })
         
         new_edges = []

@@ -18,12 +18,26 @@ genai.configure(api_key=API_KEY)
 
 # --- File Paths ---
 # Assumes this script is in ai_module/src/gemini_API
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-AI_MODULE_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..",".."))
-RELTR_SG_DIR = os.path.abspath(os.path.join(AI_MODULE_DIR, "src","reltr_scene_graph","reltr_scene_graph"))
+
+import rospkg
+
+# 현재 실행 중인 패키지: gemini_api
+rp = rospkg.RosPack()
+GEMINI_API_DIR = rp.get_path("gemini_api")
+
+AI_MODULE_DIR = os.path.abspath(os.path.join(GEMINI_API_DIR, "..", ".."))
+
+RELTR_SG_DIR = os.path.join(AI_MODULE_DIR, "src", "reltr_scene_graph", "reltr_scene_graph")
 
 IMAGE_DIR = os.path.join(AI_MODULE_DIR, "data", "image_per_node")
-SCENE_GRAPH_PATH = os.path.join(RELTR_SG_DIR, "data", "all_merged_sg", "all_merged_sg.json")
+SCENE_GRAPH_PATH = os.path.join(RELTR_SG_DIR, "data", "all_merged_sg", "all_merged.json")
+
+# SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# AI_MODULE_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..","..",".."))
+# RELTR_SG_DIR = os.path.abspath(os.path.join(AI_MODULE_DIR, "src","reltr_scene_graph","reltr_scene_graph"))
+
+# IMAGE_DIR = os.path.join(AI_MODULE_DIR, "data", "image_per_node")
+# SCENE_GRAPH_PATH = os.path.join(RELTR_SG_DIR, "data", "all_merged_sg", "all_merged_sg.json")
 
 class NumericalAnswerGenerator:
     def __init__(self):
@@ -34,7 +48,7 @@ class NumericalAnswerGenerator:
         # 2: Image-only, Integer + Explanation
         # 3: Image + Scene Graph, Integer
         # 4: Image + Scene Graph, Integer + Explanation
-        self.mode = rospy.get_param("~mode", 2)
+        self.mode = rospy.get_param("~mode", 3)
         
         # --- ROS Communication ---
         # Subscriber for the question
@@ -42,7 +56,18 @@ class NumericalAnswerGenerator:
         # Publisher for the answer
         self.response_pub = rospy.Publisher('/numerical_response', String, queue_size=10)
 
-        self.model = genai.GenerativeModel("gemini-2.5-pro")
+        self.model = genai.GenerativeModel(
+            "gemini-2.5-flash",
+            generation_config={
+                "temperature": 0.2,
+                "max_output_tokens": 256,  # 필요시 조정
+            },
+            safety_settings=[
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ],
+        )
         self.images = self.load_images()
         self.scene_graph = self.load_scene_graph()
 
@@ -68,8 +93,9 @@ class NumericalAnswerGenerator:
 
         for filename in image_files:
             try:
-                img_path = os.path.join(IMAGE_DIR, filename)
-                images.append(Image.open(img_path))
+                if len(images) <= 2 :
+                    img_path = os.path.join(IMAGE_DIR, filename)
+                    images.append(Image.open(img_path))
             except Exception as e:
                 rospy.logerr(f"Failed to load image {filename}: {e}")
         rospy.loginfo(f"Successfully loaded {len(images)} images.")
@@ -121,6 +147,41 @@ class NumericalAnswerGenerator:
         
         return full_prompt
 
+    def parse_gemini_text(self, response):
+        if not response:
+            raise RuntimeError("Empty response object")
+
+        # 후보 유무 확인
+        candidates = getattr(response, "candidates", None)
+        if not candidates:
+            pf = getattr(response, "prompt_feedback", None)
+            raise RuntimeError(f"No candidates. prompt_feedback={pf}")
+
+        cand = candidates[0]
+        fr = getattr(cand, "finish_reason", None)
+        safety = getattr(cand, "safety_ratings", None)
+
+        text_chunks = []
+        content = getattr(cand, "content", None)
+        if content and getattr(content, "parts", None):
+            for p in content.parts:
+                t = getattr(p, "text", None)
+                if t:
+                    text_chunks.append(t)
+
+        text = "\n".join(text_chunks).strip()
+
+        if not text:
+            try:
+                text = (response.text or "").strip()
+            except Exception:
+                pass
+
+        if not text:
+            raise RuntimeError(f"No text parts in response. finish_reason={fr}, safety={safety}")
+
+        return text
+
     def question_callback(self, msg):
         """Handles incoming questions, generates an answer, and publishes it."""
         question = msg.data
@@ -135,7 +196,7 @@ class NumericalAnswerGenerator:
         try:
             rospy.loginfo("Sending request to Gemini API...")
             response = self.model.generate_content(prompt_parts)
-            answer = response.text
+            answer = self.parse_gemini_text(response)
             
             rospy.loginfo(f"Received answer from Gemini: \"{answer}\"")
             self.response_pub.publish(String(data=answer))

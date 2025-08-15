@@ -1,0 +1,6 @@
+<launch>
+  <include file="$(find planning_node)/launch/plan_depth.launch"/>
+  <include file="$(find reltr_scene_graph)/launch/reltr_sgg.launch"/>
+  <include file="$(find captioniong)/launch/captioning.launch"/>
+  <include file="$(find gemini_api)/launch/gemini_api.launch"/>
+</launch>

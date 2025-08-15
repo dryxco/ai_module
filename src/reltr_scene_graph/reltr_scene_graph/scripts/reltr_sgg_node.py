@@ -64,7 +64,8 @@ class RelTRSGGNode:
 
         self.if_process = False
         rospy.Subscriber('/exp_mode', String, self.mode_callback, queue_size=1)
-        
+        rospy.Subscriber('/caption_fin', String, self.caption_callback, queue_size=1)
+        self.caption = False
         # to check if robot is in the new map
         rospy.Subscriber("/edge_list", Int32MultiArray, self.list_callback)
 
@@ -76,14 +77,24 @@ class RelTRSGGNode:
         rospy.loginfo(f"[reltr_sgg] Subscribed to {self.image_topic}")
         
         self.pub_json = rospy.Publisher("scene_graph/json", String, queue_size=10)
+        self.caption_pub = rospy.Publisher("caption_mode", String, queue_size=1)
         self.fin_pub = rospy.Publisher("/reltr_mode", String, queue_size = 1)
     
+    def caption_callback(self, msg):
+        if msg.data != "fin":
+            pass
+        else : 
+            self.caption = True
+
     def mode_callback(self, msg):
         if msg.data != "fin":
             self.if_process = False
         else :
             if not self.if_process :
                 self.generate_all_scene_graphs()
+                self.caption_pub.publish(String(data="fin"))
+                while not self.caption:
+                    pass
                 self.merge_all_graph()
 
                 msg = String()
