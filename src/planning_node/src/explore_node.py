@@ -9,7 +9,7 @@ from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
 from sensor_msgs.msg import CompressedImage, Image
 from geometry_msgs.msg import Point, PoseStamped, Pose2D
-from std_msgs.msg import String, Int32MultiArray
+from std_msgs.msg import String, Int32MultiArray, Header
 
 import hashlib, struct
 from collections import defaultdict
@@ -24,6 +24,11 @@ class ExplorationNode:
     def __init__(self):
         rospy.init_node('exploration_node')
         
+        # coverage params
+        self.coverage_radius = rospy.get_param("~coverage_radius", 2.0)
+        self.grid_size = rospy.get_param("~grid_size", 5.0)
+        self.cluster_adjacent_threshold = rospy.get_param("~cluster_adjacent_threshold", self.grid_size * 1.2)
+
         self.mst_edges = []
         self.nodes = []
         self.new_data = True
@@ -34,6 +39,7 @@ class ExplorationNode:
         self.traversal_order = []
         
         self.position = None
+        self.path_points = []
         self.node_to_travel = []
 
         self.edge_routes = {}
@@ -77,6 +83,8 @@ class ExplorationNode:
 
         self.pose_pub = rospy.Publisher('/way_point_with_heading', Pose2D, queue_size=1)
         self.mode_pub = rospy.Publisher('/exp_mode', String, queue_size=1)
+        self.uncovered_pub = rospy.Publisher('/uncovered_nodes', PointCloud2, queue_size=1)
+        self.uncovered_clusters_pub = rospy.Publisher('/uncovered_clusters', Marker, queue_size=10)
 
         rospy.Timer(rospy.Duration(0.2), self.timer_callback)
         self.topic_buffer = rospy.Timer(rospy.Duration(1.0), self.buffer)
@@ -137,6 +145,8 @@ class ExplorationNode:
             msg.pose.pose.position.y,
             msg.pose.pose.position.z
         ])
+        # record path for coverage estimation
+        self.path_points.append(self.position.copy())
     
     def hash_list(self, msg):
         packed = struct.pack(f'{len(msg.data)}i', *msg.data)
@@ -313,6 +323,16 @@ class ExplorationNode:
                             self.stop_recording()
                             self.explore_stop = True
                             self.store_data()
+                            # coverage post-processing
+                            try:
+                                uncovered_indices = self.compute_uncovered_nodes(self.nodes, self.path_points, self.coverage_radius)
+                                uncovered_points = [self.nodes[i] for i in uncovered_indices]
+                                clusters = self.cluster_points(uncovered_points, self.cluster_adjacent_threshold)
+                                self.publish_uncovered(uncovered_points, clusters)
+                                self.save_uncovered_json(uncovered_points, clusters)
+                                rospy.loginfo(f"[Coverage] uncovered nodes: {len(uncovered_indices)}, clusters: {len(clusters)}")
+                            except Exception as e:
+                                rospy.logerr(f"[Coverage] failed: {e}")
                             rospy.logwarn("all nodes reached! arrived at initial root node")
     
     def start_recording(self, data_root=None):
@@ -415,6 +435,98 @@ class ExplorationNode:
 
     def run(self):
         rospy.spin()
+
+    # ===== Coverage utilities =====
+    def compute_uncovered_nodes(self, nodes, path_points, radius):
+        if not nodes or not path_points:
+            return []
+        nodes_np = np.array(nodes)[:, :2]
+        path_np = np.array(path_points)[:, :2]
+        # pairwise distances from nodes to path points
+        diff = nodes_np[:, None, :] - path_np[None, :, :]
+        dists = np.linalg.norm(diff, axis=2)
+        min_d = dists.min(axis=1)
+        uncovered_mask = min_d > radius
+        return [i for i, flag in enumerate(uncovered_mask) if flag]
+
+    def cluster_points(self, points, threshold):
+        n = len(points)
+        if n == 0:
+            return []
+        pts = np.array(points)[:, :2]
+        visited = [False] * n
+        clusters = []
+        for i in range(n):
+            if visited[i]:
+                continue
+            queue = [i]
+            visited[i] = True
+            cluster = [i]
+            while queue:
+                cur = queue.pop()
+                diff = pts - pts[cur]
+                d = np.hypot(diff[:, 0], diff[:, 1])
+                neighbors = [j for j in range(n) if not visited[j] and d[j] <= threshold]
+                for j in neighbors:
+                    visited[j] = True
+                    queue.append(j)
+                    cluster.append(j)
+            clusters.append(cluster)
+        return clusters
+
+    def publish_uncovered(self, uncovered_points, clusters):
+        header = Header()
+        header.stamp = rospy.Time.now()
+        header.frame_id = "map"
+        fields = [
+            PointField('x', 0, PointField.FLOAT32, 1),
+            PointField('y', 4, PointField.FLOAT32, 1),
+            PointField('z', 8, PointField.FLOAT32, 1),
+        ]
+        if len(uncovered_points) > 0:
+            pc_msg = pc2.create_cloud(header, fields, uncovered_points)
+            self.uncovered_pub.publish(pc_msg)
+
+        palette = [
+            (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0),
+            (1.0, 0.5, 0.0), (0.6, 0.2, 0.8), (0.2, 0.7, 0.7),
+        ]
+        for idx, cluster in enumerate(clusters):
+            marker = Marker()
+            marker.header.frame_id = "map"
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = "uncovered_clusters"
+            marker.id = idx
+            marker.type = Marker.CUBE_LIST
+            marker.action = Marker.ADD
+            marker.scale.x = 0.4
+            marker.scale.y = 0.4
+            marker.scale.z = 0.2
+            r, g, b = palette[idx % len(palette)]
+            marker.color.r = r
+            marker.color.g = g
+            marker.color.b = b
+            marker.color.a = 0.9
+            for j in cluster:
+                p = uncovered_points[j]
+                marker.points.append(Point(x=p[0], y=p[1], z=p[2]))
+            self.uncovered_clusters_pub.publish(marker)
+
+    def save_uncovered_json(self, uncovered_points, clusters):
+        data_root = os.path.abspath(os.path.join(__file__, '..', '..', '..', '..', 'data'))
+        os.makedirs(data_root, exist_ok=True)
+        payload = {
+            "coverage_radius_m": float(self.coverage_radius),
+            "cluster_adjacent_threshold_m": float(self.cluster_adjacent_threshold),
+            "uncovered_nodes": [
+                {"x": float(p[0]), "y": float(p[1]), "z": float(p[2])} for p in uncovered_points
+            ],
+            "clusters": [
+                {"indices": cluster} for cluster in clusters
+            ]
+        }
+        with open(os.path.join(data_root, 'uncovered_clusters.json'), 'w') as f:
+            json.dump(payload, f, indent=2)
 
 
 if __name__ == '__main__':

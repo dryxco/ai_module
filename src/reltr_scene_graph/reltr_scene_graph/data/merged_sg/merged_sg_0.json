@@ -4,83 +4,70 @@
       "id": "room1",
       "label": "room",
       "bbox": [
-        2.8084373474121094,
-        0.9771919250488281,
-        1922.35107421875,
-        639.8455810546875
+        2.5670814514160156,
+        1.0460472106933594,
+        1922.12451171875,
+        639.8425903320312
       ],
       "bboxes": {
         "0002": [
-          2.8084373474121094,
-          0.9771919250488281,
-          1922.35107421875,
-          639.8455810546875
+          2.5670814514160156,
+          1.0460472106933594,
+          1922.12451171875,
+          639.8425903320312
         ]
       },
-      "caption": ""
+      "caption": "The image displays a 360-degree panoramic view of an office interior featuring a brick wall with a bulletin board, a vending machine, and an open-plan workspace with desks and a reception area."
     },
     {
       "id": "window1",
       "label": "window",
       "bbox": [
-        1397.8292236328125,
-        239.14224243164062,
-        1528.35546875,
-        328.40087890625
+        1209.3292236328125,
+        238.87313842773438,
+        1547.925537109375,
+        332.9339294433594
       ],
       "bboxes": {
         "0002": [
-          1405.2601318359375,
-          240.9259796142578,
-          1525.297607421875,
-          324.61871337890625
+          1406.0980224609375,
+          240.40667724609375,
+          1522.617919921875,
+          328.6381530761719
         ],
         "0003": [
-          1397.8292236328125,
-          239.14224243164062,
-          1528.35546875,
-          328.40087890625
+          1419.4141845703125,
+          240.7837677001953,
+          1547.925537109375,
+          330.88470458984375
+        ],
+        "0004": [
+          1209.3292236328125,
+          238.87313842773438,
+          1314.43798828125,
+          332.9339294433594
         ]
       },
-      "caption": "The image displays two tall, white-framed windows set into a red brick wall, with reflections visible in the glass panes."
+      "caption": ""
     },
     {
-      "id": "chair1",
-      "label": "chair",
+      "id": "building1",
+      "label": "building",
       "bbox": [
-        1372.3013916015625,
-        317.12860107421875,
-        1488.677978515625,
-        392.8779602050781
+        2.3474693298339844,
+        0.7431793212890625,
+        1919.99267578125,
+        636.9976806640625
       ],
       "bboxes": {
-        "0002": [
-          1372.3013916015625,
-          317.12860107421875,
-          1488.677978515625,
-          392.8779602050781
+        "0004": [
+          2.3474693298339844,
+          0.7431793212890625,
+          1919.99267578125,
+          636.9976806640625
         ]
       },
-      "caption": "Two office chairs are positioned in a room with a brick wall in the background."
-    },
-    {
-      "id": "window2",
-      "label": "window",
-      "bbox": [
-        827.7939453125,
-        248.26962280273438,
-        991.5338745117188,
-        387.25885009765625
-      ],
-      "bboxes": {
-        "0003": [
-          827.7939453125,
-          248.26962280273438,
-          991.5338745117188,
-          387.25885009765625
-        ]
-      },
-      "caption": "The image displays a tall, grey vending machine filled with various beverages and snacks."
+      "caption": ""
     }
   ],
   "edges": [
@@ -88,25 +75,19 @@
       "subject": "room1",
       "object": "window1",
       "predicate": "has",
-      "confidence": 0.10255958139896393
-    },
-    {
-      "subject": "chair1",
-      "object": "room1",
-      "predicate": "in",
-      "confidence": 0.0682334154844284
+      "confidence": 0.053538884967565536
     },
     {
       "subject": "room1",
       "object": "window1",
       "predicate": "has",
-      "confidence": 0.07058848440647125
+      "confidence": 0.0662727952003479
     },
     {
-      "subject": "window2",
-      "object": "room1",
+      "subject": "window1",
+      "object": "building1",
       "predicate": "in",
-      "confidence": 0.037416521459817886
+      "confidence": 0.0573151633143425
     }
   ]
 }

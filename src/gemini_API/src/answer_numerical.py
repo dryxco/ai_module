@@ -30,7 +30,7 @@ AI_MODULE_DIR = os.path.abspath(os.path.join(GEMINI_API_DIR, "..", ".."))
 RELTR_SG_DIR = os.path.join(AI_MODULE_DIR, "src", "reltr_scene_graph", "reltr_scene_graph")
 
 IMAGE_DIR = os.path.join(AI_MODULE_DIR, "data", "image_per_node")
-SCENE_GRAPH_PATH = os.path.join(RELTR_SG_DIR, "data", "all_merged_sg", "all_merged.json")
+SCENE_GRAPH_PATH = os.path.join(RELTR_SG_DIR, "data", "all_merged_sg", "all_merged_sg.json")
 
 # SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # AI_MODULE_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..","..",".."))
@@ -48,7 +48,7 @@ class NumericalAnswerGenerator:
         # 2: Image-only, Integer + Explanation
         # 3: Image + Scene Graph, Integer
         # 4: Image + Scene Graph, Integer + Explanation
-        self.mode = rospy.get_param("~mode", 3)
+        self.mode = rospy.get_param("~mode", 4)
         
         # --- ROS Communication ---
         # Subscriber for the question
@@ -57,16 +57,19 @@ class NumericalAnswerGenerator:
         self.response_pub = rospy.Publisher('/numerical_response', String, queue_size=10)
 
         self.model = genai.GenerativeModel(
-            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",  #flash  flash-lite pro
             generation_config={
                 "temperature": 0.2,
-                "max_output_tokens": 256,  # 필요시 조정
+                "top_p": 0.8,
+                "top_k": 40,
+                "max_output_tokens": 2048,  # 필요시 증가
+                "response_mime_type": "text/plain",  # 텍스트 강제
             },
-            safety_settings=[
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ],
+        #     safety_settings=[
+        #     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+        #     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+        #     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        # ],
         )
         self.images = self.load_images()
         self.scene_graph = self.load_scene_graph()
@@ -129,7 +132,7 @@ class NumericalAnswerGenerator:
         elif self.mode == 3:
             instruction = "Use the provided scene graph data to inform your answer. Your answer MUST be only a single integer number and nothing else."
         elif self.mode == 4:
-            instruction = "Use the provided scene graph data to inform your answer. First, provide a single integer number as the answer on the first line. On the next line, provide a explanation for your answer."
+            instruction = "Use the provided image data to inform your answer. You should incorporate images and merge duplicate objects to recognize the whole map environment. Be aware to use and match accurate object noun labels. You can use scene graph for supplementary materials. First, provide a single integer number as the answer on the first line. On the next line, provide a explanation for your answer."
         else:
             rospy.logwarn(f"Invalid mode: {self.mode}. Defaulting to mode 1.")
             instruction = "Your answer MUST be only a single integer number and nothing else."
@@ -181,7 +184,26 @@ class NumericalAnswerGenerator:
             raise RuntimeError(f"No text parts in response. finish_reason={fr}, safety={safety}")
 
         return text
-
+    
+    def _extract_text_from_stream(self, prompt_parts):
+        buff = []
+        stream = self.model.generate_content(prompt_parts, stream=True)
+        try:
+            for chunk in stream:
+                # chunk.text가 있으면 누적
+                if getattr(chunk, "text", None):
+                    buff.append(chunk.text)
+            # 스트림 해제(예외 발생 시에도 finally에서 처리될 수 있게 보장)
+            stream.resolve()
+        except Exception:
+            # 스트리밍 도중 예외 발생 시에도 해제 시도
+            try:
+                stream.resolve()
+            except Exception:
+                pass
+            raise
+        return "".join(buff).strip()
+    
     def question_callback(self, msg):
         """Handles incoming questions, generates an answer, and publishes it."""
         question = msg.data
@@ -195,7 +217,25 @@ class NumericalAnswerGenerator:
         
         try:
             rospy.loginfo("Sending request to Gemini API...")
-            response = self.model.generate_content(prompt_parts)
+            response = self.model.generate_content(prompt_parts, stream=False)
+
+            pf = getattr(response, "prompt_feedback", None)
+            if pf and getattr(pf, "block_reason", None):
+                raise RuntimeError(f"Blocked by safety: {pf.block_reason}")
+
+            print(response)
+            answer = self.parse_gemini_text(response)
+            if not answer:
+                fr = None
+                safety = None
+                cands = getattr(response, "candidates", None)
+                if cands:
+                    fr = getattr(cands[0], "finish_reason", None)
+                    safety = getattr(cands[0], "safety_ratings", None)
+                rospy.logwarn(f"No text in non-stream response. Retrying with stream. finish_reason={fr}, safety={safety}")
+
+                answer = self._extract_text_from_stream(prompt_parts)
+
             answer = self.parse_gemini_text(response)
             
             rospy.loginfo(f"Received answer from Gemini: \"{answer}\"")
